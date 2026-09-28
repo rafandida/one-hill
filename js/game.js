@@ -32,7 +32,7 @@
   const W = 640;
   const H = 400;
   const HUD = 28;
-  const FOOT = 18;
+  const FOOT = 34;
   const PLAY_TOP = HUD;
   const PLAY_H = H - HUD;
   const GRAVITY = 240;
@@ -62,7 +62,7 @@
       id: "bomb",
       name: "HE BOMB",
       key: "2",
-      ammo: 5,
+      ammo: 2,
       radius: 28,
       damage: 78,
       kind: "blast",
@@ -71,7 +71,7 @@
       id: "mirv",
       name: "MIRV",
       key: "3",
-      ammo: 3,
+      ammo: 1,
       radius: 12,
       damage: 40,
       kind: "mirv",
@@ -80,7 +80,7 @@
       id: "digger",
       name: "DIGGER",
       key: "4",
-      ammo: 4,
+      ammo: 2,
       radius: 18,
       damage: 58,
       kind: "digger",
@@ -88,15 +88,44 @@
     {
       id: "nuke",
       name: "NUKE",
+      short: "NUKE",
       key: "5",
       ammo: 0,
       radius: 46,
       damage: 120,
       kind: "blast",
     },
+    {
+      id: "dirt",
+      name: "DIRT",
+      short: "DIRT",
+      key: "6",
+      ammo: 1,
+      radius: 26,
+      damage: 0,
+      kind: "mound",
+    },
   ];
 
-  const CRATE_KINDS = ["bomb", "bomb", "mirv", "digger", "nuke"];
+  WEAPONS[0].short = "SH";
+  WEAPONS[1].short = "HE";
+  WEAPONS[2].short = "MIRV";
+  WEAPONS[3].short = "DIG";
+
+  const SHOP = [
+    { id: "bomb", name: "HE BOMB x2", cost: 400, blurb: "wide craters" },
+    { id: "mirv", name: "MIRV", cost: 500, blurb: "splits three ways" },
+    { id: "dirt", name: "DIRT BOMB", cost: 300, blurb: "piles a mound" },
+    { id: "guide", name: "GUIDANCE", cost: 200, blurb: "one dotted arc" },
+    { id: "shield", name: "SHIELD", cost: 650, blurb: "blocks the next hit" },
+    { id: "nuke", name: "NUKE", cost: 1200, blurb: "do not miss" },
+  ];
+
+  const MAPS = ["canyon", "mesa", "water"];
+  const MAP_LABEL = { canyon: "CANYON", mesa: "MESA", water: "WATER GAP" };
+  const WINS_TO_TAKE = 3;
+
+  const CRATE_KINDS = ["bomb", "bomb", "mirv", "digger", "dirt", "nuke"];
 
   // ---------------------------------------------------------------------------
   // Utilities
@@ -154,6 +183,68 @@
       sm[x] = acc / c;
     }
     return sm;
+  }
+
+  function mesaHeights(rng) {
+    const p0 = rng() * Math.PI * 2;
+    const p1 = rng() * Math.PI * 2;
+    const out = new Float32Array(W);
+    const base = PLAY_TOP + PLAY_H * 0.66;
+    for (let x = 0; x < W; x++) {
+      const t = x / (W - 1);
+      const n = Math.sin(t * Math.PI * 2.2 + p0) * 0.03 + Math.sin(t * Math.PI * 7 + p1) * 0.012;
+      out[x] = clamp(base + n * PLAY_H, PLAY_TOP + 100, H - FOOT - 16);
+    }
+    return out;
+  }
+
+  function generateMap(kind, rng) {
+    if (kind === "mesa") return { height: mesaHeights(rng), water: null };
+    if (kind === "water") {
+      const banks = mesaHeights(rng);
+      const height = new Float32Array(W);
+      const x0 = 236;
+      const x1 = 404;
+      const lip = 26;
+      const bed = H - FOOT - 8;
+      const surface = Math.round(PLAY_TOP + PLAY_H * 0.6);
+      for (let x = 0; x < W; x++) {
+        const bank = Math.min(banks[x], surface - 40);
+        if (x < x0 - lip || x > x1 + lip) height[x] = bank;
+        else if (x >= x0 && x <= x1) height[x] = bed;
+        else if (x < x0) {
+          const u = (x - (x0 - lip)) / lip;
+          height[x] = bank + (bed - bank) * u;
+        } else {
+          const u = ((x1 + lip) - x) / lip;
+          const far = Math.min(banks[Math.min(W - 1, x1 + lip)], surface - 40);
+          height[x] = far + (bed - far) * u;
+        }
+      }
+      return { height: height, water: { x0: x0, x1: x1, y: surface } };
+    }
+    const height = generateHeightmap(W, rng);
+    for (let x = 0; x < W; x++) {
+      const t = (x / (W - 1) - 0.5) * 2;
+      const valley = Math.exp(-(t * t) / 0.11);
+      height[x] = clamp(height[x] + valley * 155 - 16, PLAY_TOP + 58, H - FOOT - 8);
+    }
+    return { height: height, water: null };
+  }
+
+  function inWater(water, x, y) {
+    return !!(water && x >= water.x0 && x <= water.x1 && y >= water.y);
+  }
+
+  function mound(height, cx, radius, lift) {
+    const x0 = Math.max(0, Math.floor(cx - radius));
+    const x1 = Math.min(height.length - 1, Math.ceil(cx + radius));
+    for (let x = x0; x <= x1; x++) {
+      const dx = (x - cx) / radius;
+      const t = Math.cos(Math.min(1, Math.abs(dx)) * Math.PI * 0.5);
+      if (t <= 0) continue;
+      height[x] = Math.max(PLAY_TOP + 46, height[x] - lift * t);
+    }
   }
 
   function surfaceY(height, x) {
@@ -322,6 +413,13 @@
     fall: function () {
       this.slide(240, 110, 0.1, "square", 0.03);
     },
+    splash: function () {
+      this.noise(0.16, 0.08, 900);
+      this.slide(500, 180, 0.12, "sine", 0.03);
+    },
+    deny: function () {
+      this.beep(180, 0.06, "square", 0.03);
+    },
   };
 
   // ---------------------------------------------------------------------------
@@ -419,6 +517,30 @@
     game.shake = Math.max(game.shake, mag);
   }
 
+  function callout(game, x, y, text, color) {
+    game.callouts.push({ x: x, y: y, text: text, color: color || C.yellow, t: 0, life: 1.15 });
+  }
+
+  function stepCallouts(game, dt) {
+    for (let i = game.callouts.length - 1; i >= 0; i--) {
+      const c = game.callouts[i];
+      c.t += dt;
+      c.y -= 16 * dt;
+      if (c.t >= c.life) game.callouts.splice(i, 1);
+    }
+  }
+
+  function splash(game, x, y) {
+    burst(game, x, y, 14, {
+      colors: [C.lblue, C.lcyan, C.white, C.blue],
+      spd: 55,
+      up: 50,
+      life: 0.45,
+    });
+    Sfx.splash();
+    addShake(game, 1.6);
+  }
+
   // ---------------------------------------------------------------------------
   // Weapons / projectiles
   // ---------------------------------------------------------------------------
@@ -479,7 +601,20 @@
     );
   }
 
-  function applyBlast(game, cx, cy, weapon) {
+  function applyMound(game, cx, cy, weapon) {
+    mound(game.height, cx, weapon.radius, 30);
+    burst(game, cx, cy, 16, {
+      colors: [C.brown, "#774400", C.yellow, C.green],
+      spd: 40,
+      up: 20,
+      life: 0.4,
+    });
+    addShake(game, 3);
+    Sfx.explode(false);
+    callout(game, cx, cy - 16, "MOUND", C.green);
+  }
+
+  function applyBlast(game, cx, cy, weapon, owner) {
     const r = weapon.radius;
     excavate(game.height, cx, cy, r);
     burst(game, cx, cy, Math.round(10 + r * 0.7), {
@@ -497,6 +632,7 @@
     });
     addShake(game, r > 36 ? 10 : r > 20 ? 6 : 3.2);
 
+    let punched = false;
     for (let i = 0; i < game.tanks.length; i++) {
       const t = game.tanks[i];
       if (!t.alive) continue;
@@ -507,9 +643,14 @@
       if (d < reach) {
         const falloff = 1 - d / reach;
         const dmg = Math.round(weapon.damage * (0.35 + 0.65 * falloff));
-        hurt(game, t, dmg);
+        const res = hurt(game, t, dmg, owner);
+        if (res === "hit") punched = true;
+      } else if (d < reach + 40) {
+        callout(game, t.x, t.y - 24, "CLOSE!", C.yellow);
+        addShake(game, 2.4);
       }
     }
+    if (punched) addShake(game, r > 20 ? 8 : 5);
     game.explosions.push({
       x: cx,
       y: cy,
@@ -521,25 +662,44 @@
     Sfx.explode(r > 20);
   }
 
-  function hurt(game, tank, dmg) {
-    if (!tank.alive) return;
+  function hurt(game, tank, dmg, owner) {
+    if (!tank.alive || dmg <= 0) return null;
+    if (tank.shields > 0) {
+      tank.shields--;
+      tank.flash = 0.28;
+      callout(game, tank.x, tank.y - 24, "BLOCKED", C.lcyan);
+      burst(game, tank.x, tank.y - 8, 8, {
+        colors: [C.lcyan, C.white],
+        spd: 50,
+        up: 20,
+        g: false,
+        life: 0.25,
+      });
+      addShake(game, 4);
+      Sfx.hit();
+      return "block";
+    }
     tank.hp = Math.max(0, tank.hp - dmg);
     tank.flash = 0.2;
-    burst(game, tank.x, tank.y - 6, 6, {
+    burst(game, tank.x, tank.y - 6, 8, {
       colors: [tank.color, C.white, C.yellow],
-      spd: 70,
+      spd: 80,
       up: 40,
       g: false,
-      life: 0.22,
+      life: 0.25,
     });
+    addShake(game, dmg >= 60 ? 11 : 7);
     Sfx.hit();
-    if (tank.hp <= 0) kill(game, tank);
+    if (tank.hp <= 0) kill(game, tank, owner);
+    return "hit";
   }
 
-  function kill(game, tank) {
+  function kill(game, tank, owner) {
+    if (!tank.alive && tank.hp <= 0 && tank.death > 0) return;
     tank.alive = false;
     tank.hp = 0;
     tank.death = 1.15;
+    if (owner && owner !== tank) owner.roundKills = (owner.roundKills || 0) + 1;
     tank.bits = [];
     for (let i = 0; i < 14; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -567,7 +727,7 @@
       life: 0.55,
       big: true,
     });
-    excavate(game.height, tank.x, tank.y, 16);
+    if (!inWater(game.water, tank.x, tank.y)) excavate(game.height, tank.x, tank.y, 16);
     Sfx.death();
     game.pendingCrate = true;
   }
@@ -576,6 +736,7 @@
     if (kind === "nuke") tank.ammo[weaponIndex("nuke")] += 1;
     else if (kind === "bomb") tank.ammo[weaponIndex("bomb")] += 2;
     else if (kind === "mirv") tank.ammo[weaponIndex("mirv")] += 1;
+    else if (kind === "dirt") tank.ammo[weaponIndex("dirt")] += 1;
     else tank.ammo[weaponIndex("digger")] += 1;
   }
 
@@ -590,6 +751,7 @@
       if (clear) break;
       x = irand(36, W - 36);
     }
+    if (game.water && x > game.water.x0 - 8 && x < game.water.x1 + 8) return;
     game.crates.push({
       x: x,
       y: PLAY_TOP + 6,
@@ -688,10 +850,17 @@
           });
         }
 
+        if (inWater(game.water, p.x, p.y)) {
+          splash(game, p.x, game.water.y);
+          p.dead = true;
+          break;
+        }
+
         if (p.armed) {
           for (let t = 0; t < game.tanks.length; t++) {
             if (tankHit(game.tanks[t], p.x, p.y, 1)) {
-              applyBlast(game, p.x, p.y, p.weapon);
+              if (p.weapon.kind === "mound") applyMound(game, p.x, p.y, p.weapon);
+              else applyBlast(game, p.x, p.y, p.weapon, p.owner);
               p.dead = true;
               break;
             }
@@ -716,18 +885,19 @@
           }
           p.digLeft -= sdt;
           if (p.digLeft <= 0) {
-            applyBlast(game, p.x, p.y, p.weapon);
+            applyBlast(game, p.x, p.y, p.weapon, p.owner);
             p.dead = true;
           }
         } else if (inDirt) {
-          applyBlast(game, p.x, p.y, p.weapon);
+          if (p.weapon.kind === "mound") applyMound(game, p.x, p.y, p.weapon);
+          else applyBlast(game, p.x, p.y, p.weapon, p.owner);
           p.dead = true;
         }
       }
     }
   }
 
-  function previewArc(tank, wind, height) {
+  function previewArc(tank, wind, height, water) {
     const m = muzzle(tank);
     const rad = (tank.angle * Math.PI) / 180;
     const v = tank.power * POWER_K;
@@ -743,6 +913,7 @@
       x += vx * dt;
       y += vy * dt;
       if (x < 0 || x >= W || y >= H) break;
+      if (inWater(water, x, y)) break;
       if (y >= PLAY_TOP && y >= surfaceY(height, x)) break;
       if (i % 2 === 1) pts.push(x, y);
     }
@@ -752,7 +923,7 @@
   // ---------------------------------------------------------------------------
   // AI — sample trajectories; slop depends on difficulty
   // ---------------------------------------------------------------------------
-  function simulateImpact(sx, sy, angle, power, wind, height, maxT) {
+  function simulateImpact(sx, sy, angle, power, wind, height, water, maxT) {
     const rad = (angle * Math.PI) / 180;
     const v = power * POWER_K;
     let x = sx;
@@ -767,6 +938,7 @@
       x += vx * dt;
       y += vy * dt;
       if (x < 0 || x >= W || y >= H) return { x: x, y: y };
+      if (inWater(water, x, y)) return { x: x, y: y };
       if (y >= PLAY_TOP && y >= surfaceY(height, x)) return { x: x, y: y };
     }
     return { x: x, y: y };
@@ -803,7 +975,7 @@
     let pick = { err: 1e9, angle: facingRight ? 45 : 135, power: 60 };
     for (let angle = a0; angle <= a1; angle += coarse) {
       for (let power = 24; power <= pMax; power += coarse + 1) {
-        const hit = simulateImpact(muz.x, muz.y, angle, power, windUse, game.height);
+        const hit = simulateImpact(muz.x, muz.y, angle, power, windUse, game.height, game.water);
         const err = Math.hypot(hit.x - target.x, hit.y - (target.y - 4));
         if (err < pick.err) pick = { err: err, angle: angle, power: power };
       }
@@ -813,7 +985,7 @@
         if (angle < 1 || angle > 179) continue;
         for (let power = pick.power - 5; power <= pick.power + 5; power++) {
           if (power < 10 || power > pMax) continue;
-          const hit = simulateImpact(muz.x, muz.y, angle, power, windUse, game.height);
+          const hit = simulateImpact(muz.x, muz.y, angle, power, windUse, game.height, game.water);
           const err = Math.hypot(hit.x - target.x, hit.y - (target.y - 4));
           if (err < pick.err) pick = { err: err, angle: angle, power: power };
         }
@@ -829,6 +1001,7 @@
     } else if (pick.err < 40 && tank.ammo[1] > 0) w = 1;
     else if (bestD > 180 && tank.ammo[2] > 0) w = 2;
     else if (tank.ammo[4] > 0 && pick.err < 55) w = 4;
+    else if (tank.ammo[5] > 0 && Math.random() < 0.22) w = 5;
     else if (pick.err > 70 && tank.ammo[3] > 0 && Math.random() < 0.35) w = 3;
     pick.weapon = w;
     return pick;
@@ -869,6 +1042,21 @@
     this.pendingCrate = false;
     this.turnNumber = 0;
     this.humanLost = false;
+    this.roster = null;
+    this.round = 1;
+    this.mapIndex = 0;
+    this.mapKind = "canyon";
+    this.water = null;
+    this.callouts = [];
+    this.seriesOver = false;
+    this.roundScored = false;
+    this.roundLines = [];
+    this.shopPlayer = 0;
+    this.shopCursor = 0;
+    this.shopNote = "";
+    this.shopCpu = 0;
+    this.pointer = { down: false, dragged: false, x: 0, y: 0, sx: 0, sy: 0, power: 60, aim: false };
+    this.weaponBoxes = [];
 
     this.rebuildStars();
   }
@@ -910,50 +1098,98 @@
     }
   };
 
-  Game.prototype.newBattle = function () {
+  Game.prototype.startSeries = function () {
     this.applyModeCounts();
-    this.height = generateHeightmap(W, Math.random);
+    const n = this.tankCount;
+    const humans = this.humanCount;
+    this.roster = [];
+    for (let i = 0; i < n; i++) {
+      const human = i < humans;
+      this.roster.push({
+        id: i,
+        name: human ? "P" + (i + 1) : DIFF_NAMES[this.difficulty],
+        color: PLAYER_COLORS[i],
+        dim: PLAYER_DIM[i],
+        human: human,
+        cash: 250,
+        wins: 0,
+        ammo: WEAPONS.map(function (w) {
+          return w.ammo === Infinity ? Infinity : w.ammo;
+        }),
+        shields: 0,
+        guidance: 1,
+      });
+    }
+    this.round = 1;
+    this.mapIndex = 0;
+    this.seriesOver = false;
+    this.newBattle();
+  };
+
+  function slotX(i, n, kind) {
+    if (kind === "water") {
+      const leftN = Math.ceil(n / 2);
+      if (i < leftN) return Math.round(28 + ((i + 0.5) * 170) / leftN);
+      const j = i - leftN;
+      const rightN = n - leftN;
+      return Math.round(436 + ((j + 0.5) * 160) / rightN);
+    }
+    const margin = kind === "canyon" ? 34 : 48;
+    return clamp(Math.round(margin + ((W - margin * 2) * (i + 0.5)) / n + irand(-6, 6)), 24, W - 24);
+  }
+
+  Game.prototype.newBattle = function () {
+    if (!this.roster) {
+      this.startSeries();
+      return;
+    }
+    const kind = MAPS[this.mapIndex % MAPS.length];
+    this.mapIndex++;
+    this.mapKind = kind;
+    const map = generateMap(kind, Math.random);
+    this.height = map.height;
+    this.water = map.water;
     this.rebuildStars();
     this.shots = [];
     this.explosions = [];
     this.particles = [];
     this.crates = [];
+    this.callouts = [];
     this.winner = null;
-    this.banner = "";
     this.shake = 0;
     this.pendingCrate = false;
     this.turnNumber = 0;
-    this.humanLost = false;
+    this.roundScored = false;
+    this.roundLines = [];
     this.wind = irand(-9, 9);
     if (this.wind === 0) this.wind = irand(0, 1) ? 1 : -1;
 
-    const n = this.tankCount;
-    const humans = this.humanCount;
     this.tanks = [];
-    const margin = 46;
-    for (let i = 0; i < n; i++) {
-      const x = Math.round(margin + ((W - margin * 2) * (i + 0.5)) / n + irand(-8, 8));
-      const human = i < humans;
-      const cpuName = DIFF_NAMES[this.difficulty];
+    for (let i = 0; i < this.roster.length; i++) {
+      const src = this.roster[i];
+      const x = slotX(i, this.roster.length, kind);
       this.tanks.push({
-        id: i,
-        name: human ? "P" + (i + 1) : cpuName,
-        color: PLAYER_COLORS[i],
-        dim: PLAYER_DIM[i],
-        human: human,
-        x: clamp(x, 20, W - 20),
+        id: src.id,
+        name: src.name,
+        color: src.color,
+        dim: src.dim,
+        human: src.human,
+        x: x,
         y: PLAY_TOP - 10,
         vy: 0,
         falling: true,
         fallAcc: 0,
-        angle: x < W / 2 ? 45 : 135,
-        power: 60,
+        angle: x < W / 2 ? 50 : 130,
+        power: 58,
         hp: MAX_HP,
         alive: true,
         weapon: 0,
-        ammo: WEAPONS.map(function (w) {
-          return w.ammo === Infinity ? Infinity : w.ammo;
+        ammo: src.ammo.map(function (n) {
+          return n;
         }),
+        shields: src.shields,
+        guidance: src.guidance,
+        roundKills: 0,
         flash: 0,
         death: 0,
         bits: null,
@@ -964,8 +1200,71 @@
     this.dropWait = 0.15;
     this.turn = 0;
     this.ai = null;
+    this.banner = MAP_LABEL[kind];
+    this.bannerT = 1.5;
     this.mode = "drop";
   };
+
+  function seriesChamp(roster) {
+    let best = roster[0];
+    let tied = false;
+    for (let i = 1; i < roster.length; i++) {
+      if (roster[i].wins > best.wins) {
+        best = roster[i];
+        tied = false;
+      } else if (roster[i].wins === best.wins) tied = true;
+    }
+    return tied ? null : best;
+  }
+
+  function leaderState(roster) {
+    let best = 0;
+    let count = 0;
+    for (let i = 0; i < roster.length; i++) {
+      if (roster[i].wins > best) {
+        best = roster[i].wins;
+        count = 1;
+      } else if (roster[i].wins === best) count++;
+    }
+    return { best: best, count: count };
+  }
+
+  function applyBuy(roster, item) {
+    if (roster.cash < item.cost) return false;
+    roster.cash -= item.cost;
+    if (item.id === "shield") roster.shields++;
+    else if (item.id === "guide") roster.guidance++;
+    else if (item.id === "bomb") roster.ammo[weaponIndex("bomb")] += 2;
+    else if (item.id === "mirv") roster.ammo[weaponIndex("mirv")] += 1;
+    else if (item.id === "dirt") roster.ammo[weaponIndex("dirt")] += 1;
+    else if (item.id === "nuke") roster.ammo[weaponIndex("nuke")] += 1;
+    return true;
+  }
+
+  function cpuPurchase(roster, difficulty) {
+    const plans = [
+      ["dirt", "bomb", "guide"],
+      ["bomb", "mirv", "shield", "dirt"],
+      ["nuke", "shield", "mirv", "bomb"],
+    ];
+    const plan = plans[difficulty] || plans[1];
+    const bought = [];
+    for (let n = 0; n < 3; n++) {
+      let did = false;
+      for (let i = 0; i < plan.length; i++) {
+        const item = SHOP.filter(function (s) {
+          return s.id === plan[i];
+        })[0];
+        if (item && applyBuy(roster, item)) {
+          bought.push(item.name);
+          did = true;
+          break;
+        }
+      }
+      if (!did) break;
+    }
+    return bought.length ? "BUYS " + bought.join(" + ") : "SAVES THE CASH";
+  }
 
   Game.prototype.playVictoryJingle = function () {
     const humansAlive = this.tanks.some(function (t) {
@@ -978,12 +1277,96 @@
     else Sfx.win();
   };
 
+  Game.prototype.enterVictory = function () {
+    if (this.roundScored) {
+      this.mode = "victory";
+      return;
+    }
+    this.roundScored = true;
+    const living = this.living();
+    this.winner = living.length === 1 ? living[0] : null;
+    this.roundLines = [];
+    for (let i = 0; i < this.tanks.length; i++) {
+      const t = this.tanks[i];
+      const r = this.roster[t.id];
+      r.ammo = t.ammo.map(function (n) {
+        return n;
+      });
+      r.shields = t.shields;
+      r.guidance = t.guidance;
+      let pay = (t.roundKills || 0) * 400;
+      const bits = [];
+      if (t.roundKills) bits.push("+" + t.roundKills * 400 + " kills");
+      if (this.winner && t.id === this.winner.id) {
+        pay += 700;
+        r.wins++;
+        bits.push("+700 win");
+      } else if (t.alive) {
+        pay += 150;
+        bits.push("+150 alive");
+      }
+      r.cash += pay;
+      if (bits.length) this.roundLines.push({ name: r.name, color: r.color, text: bits.join("  ") });
+    }
+    const lead = leaderState(this.roster);
+    this.seriesOver = lead.best >= WINS_TO_TAKE || (this.round >= 5 && lead.count === 1) || this.round >= 7;
+    this.mode = "victory";
+    this.playVictoryJingle();
+  };
+
+  Game.prototype.beginShop = function () {
+    this.shopPlayer = 0;
+    this.shopCursor = 0;
+    this.shopNote = "";
+    this.shopCpu = 0;
+    this.mode = "shop";
+    this.openShopPlayer();
+  };
+
+  Game.prototype.openShopPlayer = function () {
+    if (this.shopPlayer >= this.roster.length) {
+      this.round++;
+      this.newBattle();
+      return;
+    }
+    const r = this.roster[this.shopPlayer];
+    this.shopCursor = 0;
+    this.shopNote = "";
+    if (!r.human) {
+      this.shopNote = cpuPurchase(r, this.difficulty);
+      this.shopCpu = 1.05;
+      Sfx.ui();
+    } else {
+      this.shopCpu = 0;
+    }
+  };
+
+  Game.prototype.advanceShop = function () {
+    this.shopPlayer++;
+    this.openShopPlayer();
+  };
+
+  Game.prototype.tryShopBuy = function () {
+    const r = this.roster[this.shopPlayer];
+    if (!r || !r.human) return;
+    if (this.shopCursor >= SHOP.length) {
+      this.advanceShop();
+      return;
+    }
+    const item = SHOP[this.shopCursor];
+    if (applyBuy(r, item)) {
+      this.shopNote = "BOUGHT " + item.name;
+      Sfx.pickup();
+    } else {
+      this.shopNote = "NEED $" + item.cost;
+      Sfx.deny();
+    }
+  };
+
   Game.prototype.nextTurn = function () {
     const living = this.living();
     if (living.length <= 1) {
-      this.winner = living[0] || null;
-      this.mode = "victory";
-      this.playVictoryJingle();
+      this.enterVictory();
       return;
     }
     this.wind = clamp(this.wind + irand(-3, 3), -12, 12);
@@ -1004,27 +1387,41 @@
     const cur = this.current();
     cur.power = clamp(cur.power, 10, maxPowerFor(cur));
     this.ai = null;
-    this.mode = "aim";
     this.turnNumber++;
     this.banner = cur.name + "  READY?";
     this.bannerT = 1.15;
-    Sfx.ui();
     if (!cur.human) {
       const plan = aiChoose(this, cur);
       this.ai = {
         angle: plan.angle,
         power: plan.power,
         weapon: plan.weapon,
-        think: 0.45 + this.bannerT * 0.15,
+        think: 0.18,
       };
       cur.weapon = plan.weapon;
+      this.mode = "aim";
+    } else if (this.humanCount > 1) {
+      this.mode = "handoff";
+    } else {
+      this.mode = "aim";
+      Sfx.ui();
     }
+  };
+
+  Game.prototype.releaseHandoff = function () {
+    if (this.mode !== "handoff") return;
+    this.mode = "aim";
+    this.banner = this.current().name + "  READY?";
+    this.bannerT = 1.05;
+    Sfx.ui();
+    flushTaps();
   };
 
   Game.prototype.tryFire = function () {
     const tank = this.current();
     if (!tank || !tank.alive || this.mode !== "aim") return;
     if (this.bannerT > 0.85 && tank.human) return;
+    if (tank.human && tank.guidance > 0 && this.previewOn) tank.guidance--;
     const w = WEAPONS[tank.weapon];
     if (w.ammo !== Infinity) {
       if (tank.ammo[tank.weapon] <= 0) {
@@ -1091,6 +1488,11 @@
         t.vy = 0;
         t.falling = false;
       }
+      if (t.alive && inWater(this.water, t.x, t.y - 2)) {
+        splash(this, t.x, this.water.y);
+        callout(this, t.x, this.water.y - 18, "SUNK", C.lblue);
+        kill(this, t, null);
+      }
     }
     return busy;
   };
@@ -1131,6 +1533,7 @@
     if (consume("3")) tank.weapon = tank.ammo[2] > 0 ? 2 : tank.weapon;
     if (consume("4")) tank.weapon = tank.ammo[3] > 0 ? 3 : tank.weapon;
     if (consume("5")) tank.weapon = tank.ammo[4] > 0 ? 4 : tank.weapon;
+    if (consume("6")) tank.weapon = tank.ammo[5] > 0 ? 5 : tank.weapon;
     if (consume("[") || consume("{")) this.cycleWeapon(tank, -1);
     if (consume("]") || consume("}")) this.cycleWeapon(tank, 1);
     if (consume("t") || consume("T")) {
@@ -1170,12 +1573,29 @@
     }
     if (consume("Enter") || consume(" ") || consume("Spacebar")) {
       Sfx.ui();
-      this.newBattle();
+      this.startSeries();
     }
     if (consume("m") || consume("M")) {
       Sfx.muted = !Sfx.muted;
       Sfx.ui();
     }
+  };
+
+  Game.prototype.handleShopInput = function () {
+    const r = this.roster[this.shopPlayer];
+    if (!r || !r.human || this.shopCpu > 0) return;
+    const rows = SHOP.length + 1;
+    if (consume("ArrowUp") || consume("w") || consume("W")) {
+      this.shopCursor = (this.shopCursor + rows - 1) % rows;
+      Sfx.ui();
+    }
+    if (consume("ArrowDown") || consume("s") || consume("S")) {
+      this.shopCursor = (this.shopCursor + 1) % rows;
+      Sfx.ui();
+    }
+    if (consume("Enter")) this.tryShopBuy();
+    if (consume("n") || consume("N") || consume("f") || consume("F")) this.advanceShop();
+    if ((consume(" ") || consume("Spacebar")) && this.shopCursor >= SHOP.length) this.advanceShop();
   };
 
   Game.prototype.tick = function (dt) {
@@ -1191,6 +1611,7 @@
       if (this.explosions[i].t >= this.explosions[i].life) this.explosions.splice(i, 1);
     }
     stepParticles(this, dt);
+    stepCallouts(this, dt);
 
     if (this.mode === "title") {
       this.handleTitleInput();
@@ -1203,13 +1624,32 @@
     }
 
     if (consume("Escape") || consume("Esc")) {
+      this.roster = null;
       this.mode = "title";
       flushTaps();
       return;
     }
 
+    if (this.mode === "handoff") {
+      if (consume("Enter") || consume(" ") || consume("Spacebar")) this.releaseHandoff();
+      return;
+    }
+
+    if (this.mode === "shop") {
+      if (this.shopCpu > 0) {
+        this.shopCpu -= dt;
+        if (this.shopCpu <= 0) this.advanceShop();
+      } else {
+        this.handleShopInput();
+      }
+      return;
+    }
+
     if (this.mode === "victory") {
-      if (consume("Enter") || consume(" ") || consume("Spacebar")) this.newBattle();
+      if (consume("Enter") || consume(" ") || consume("Spacebar")) {
+        if (this.seriesOver) this.startSeries();
+        else this.beginShop();
+      }
       return;
     }
 
@@ -1254,12 +1694,21 @@
       this.settleTanks(dt);
       if (this.ai) {
         const tank = this.current();
+        if (consume(" ") || consume("Spacebar") || consume("Enter")) {
+          if (tank) {
+            tank.angle = this.ai.angle;
+            tank.power = this.ai.power;
+            tank.weapon = this.ai.weapon;
+            this.tryFire();
+          }
+          return;
+        }
         this.ai.think -= dt;
         if (this.ai.think <= 0 && tank) {
-          tank.angle += (this.ai.angle - tank.angle) * Math.min(1, dt * 4);
-          tank.power += (this.ai.power - tank.power) * Math.min(1, dt * 4);
+          tank.angle += (this.ai.angle - tank.angle) * Math.min(1, dt * 14);
+          tank.power += (this.ai.power - tank.power) * Math.min(1, dt * 14);
           tank.weapon = this.ai.weapon;
-          if (Math.abs(tank.angle - this.ai.angle) < 0.6 && Math.abs(tank.power - this.ai.power) < 0.6) {
+          if (Math.abs(tank.angle - this.ai.angle) < 0.8 && Math.abs(tank.power - this.ai.power) < 0.8) {
             tank.angle = this.ai.angle;
             tank.power = this.ai.power;
             this.tryFire();
@@ -1285,13 +1734,8 @@
       stepShots(this, dt);
       if (!busy && this.shots.length === 0 && this.explosions.length === 0 && this.particles.length < 8) {
         const living = this.living();
-        if (living.length <= 1) {
-          this.winner = living[0] || null;
-          this.mode = "victory";
-          this.playVictoryJingle();
-        } else {
-          this.nextTurn();
-        }
+        if (living.length <= 1) this.enterVictory();
+        else this.nextTurn();
       }
     }
   };
@@ -1328,6 +1772,18 @@
       ctx.fillStyle = speck === 1 ? C.yellow : C.green;
       ctx.fillRect(x, surface, 1, 2);
     }
+    if (this.water) {
+      const wtr = this.water;
+      ctx.fillStyle = C.blue;
+      ctx.globalAlpha = 0.92;
+      ctx.fillRect(wtr.x0, wtr.y, wtr.x1 - wtr.x0, H - wtr.y);
+      ctx.fillStyle = C.lcyan;
+      ctx.globalAlpha = 1;
+      for (let x = wtr.x0; x < wtr.x1; x += 4) {
+        const bob = ((x + Math.floor(this.time * 18)) & 7) < 3 ? 1 : 0;
+        ctx.fillRect(x, wtr.y + bob, 3, 2);
+      }
+    }
   };
 
   function drawTankSprite(ctx, tank) {
@@ -1363,6 +1819,14 @@
     ctx.fillRect(x - 4, y - 11, 8, 4);
     ctx.fillStyle = C.dgray;
     ctx.fillRect(x - 1, y - 10, 3, 2);
+
+    if (tank.alive && tank.shields > 0) {
+      ctx.save();
+      ctx.strokeStyle = C.lcyan;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x - 11, y - 16, 22, 18);
+      ctx.restore();
+    }
 
     if (tank.alive) {
       const rad = (tank.angle * Math.PI) / 180;
@@ -1507,38 +1971,61 @@
   };
 
   Game.prototype.drawWeaponBar = function (ctx) {
-    if (this.mode === "title") return;
+    if (this.mode === "title" || this.mode === "handoff" || this.mode === "shop") return;
     ctx.fillStyle = "#222222";
     ctx.fillRect(0, H - FOOT, W, FOOT);
     ctx.fillStyle = C.dgray;
     ctx.fillRect(0, H - FOOT, W, 1);
 
     const tank = this.current();
+    this.weaponBoxes = [];
     if (!tank) return;
     ctx.font = '11px "Courier New", Courier, monospace';
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
-    let x = 6;
+    let x = 4;
+    const rowY = H - FOOT + 8;
     for (let i = 0; i < WEAPONS.length; i++) {
       const w = WEAPONS[i];
       const ammo = w.ammo === Infinity ? "∞" : String(tank.ammo[i]);
       const empty = w.ammo !== Infinity && tank.ammo[i] <= 0;
       const sel = tank.weapon === i;
-      const label = i + 1 + " " + w.name + " " + ammo;
-      const tw = ctx.measureText(label).width + 10;
+      const label = i + 1 + " " + (w.short || w.name) + " " + ammo;
+      const tw = ctx.measureText(label).width + 8;
       if (sel) {
         ctx.fillStyle = tank.color;
-        ctx.fillRect(x, H - FOOT + 2, tw, FOOT - 4);
+        ctx.fillRect(x, H - FOOT + 2, tw, 14);
         ctx.fillStyle = C.black;
       } else {
         ctx.fillStyle = empty ? C.dgray : C.gray;
       }
-      ctx.fillText(label, x + 5, H - FOOT / 2);
-      x += tw + 6;
+      ctx.fillText(label, x + 4, rowY);
+      this.weaponBoxes.push({ i: i, x: x, w: tw });
+      x += tw + 4;
     }
-    ctx.fillStyle = C.dgray;
+
+    ctx.font = '10px "Courier New", Courier, monospace';
+    const y2 = H - 8;
+    ctx.fillStyle = C.lcyan;
+    ctx.fillText(MAP_LABEL[this.mapKind] + "  R" + this.round, 6, y2);
+    let sx = 118;
+    for (let i = 0; i < this.roster.length; i++) {
+      const r = this.roster[i];
+      ctx.fillStyle = r.color;
+      const bit = r.wins + (i < this.roster.length - 1 ? "-" : "");
+      ctx.fillText(bit, sx, y2);
+      sx += ctx.measureText(bit).width;
+    }
+    const purse = this.roster[tank.id];
+    ctx.fillStyle = C.yellow;
+    ctx.fillText("$" + (purse ? purse.cash : 0), sx + 10, y2);
+    ctx.fillStyle = tank.shields > 0 ? C.lcyan : C.dgray;
+    ctx.fillText("SH " + tank.shields, sx + 70, y2);
+    ctx.fillStyle = tank.guidance > 0 ? C.lgreen : C.dgray;
+    ctx.fillText("GD " + tank.guidance, sx + 112, y2);
+    ctx.fillStyle = tank.guidance > 0 && this.previewOn ? C.lgreen : C.dgray;
     ctx.textAlign = "right";
-    ctx.fillText(this.previewOn ? "T preview" : "T preview off", W - 8, H - FOOT / 2);
+    ctx.fillText(tank.guidance > 0 && this.previewOn ? "ARC ON" : "ARC OFF", W - 6, y2);
   };
 
   Game.prototype.drawAimGuide = function (ctx) {
@@ -1557,8 +2044,8 @@
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
-    if (!this.previewOn) return;
-    const pts = previewArc(tank, this.wind, this.height);
+    if (!this.previewOn || tank.guidance <= 0) return;
+    const pts = previewArc(tank, this.wind, this.height, this.water);
     ctx.fillStyle = tank.color;
     for (let i = 0; i < pts.length; i += 2) {
       ctx.globalAlpha = 0.25 + (i / pts.length) * 0.45;
@@ -1634,33 +2121,148 @@
     ctx.fillText("← → change    ↑ ↓ select row    ENTER start", W / 2, 258);
     ctx.fillStyle = C.gray;
     ctx.font = '11px "Courier New", Courier, monospace';
-    ctx.fillText("A/D angle   W/S power   SPACE fire   1-5 weapons   [ ] cycle", W / 2, 284);
-    ctx.fillText("T trajectory    M mute    crates drop extra ammo / NUKE", W / 2, 304);
+    ctx.fillText("Drag to aim, click to fire.  Keys still work.  Best of 5.", W / 2, 278);
+    ctx.fillText("A/D angle  W/S power  SPACE fire  1-6 weapons  T arc  M mute", W / 2, 298);
     ctx.fillStyle = C.dgray;
-    ctx.fillText("Last tank standing wins. Wind drifts. Dirt caves in.", W / 2, 326);
+    ctx.fillText("Kills pay. Shop between hills. Water swallows shells.", W / 2, 322);
   };
 
   Game.prototype.drawVictory = function (ctx) {
-    ctx.fillStyle = "rgba(0,0,0,0.58)";
-    ctx.fillRect(130, 112, 380, 156);
+    const tall = 168 + this.roundLines.length * 16;
+    const top = Math.max(70, 200 - tall / 2);
+    ctx.fillStyle = "rgba(0,0,0,0.62)";
+    ctx.fillRect(90, top, 460, tall);
     ctx.strokeStyle = C.yellow;
-    ctx.strokeRect(134, 116, 372, 148);
+    ctx.strokeRect(94, top + 4, 452, tall - 8);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = 'bold 26px "Courier New", Courier, monospace';
+    const champ = this.seriesOver ? seriesChamp(this.roster) : null;
+    if (this.seriesOver && champ) {
+      ctx.fillStyle = champ.color;
+      ctx.fillText(champ.name + " TAKES THE SERIES", W / 2, top + 32);
+    } else if (this.seriesOver) {
+      ctx.fillStyle = C.gray;
+      ctx.fillText("SERIES DRAWN", W / 2, top + 32);
+    } else if (this.winner) {
+      ctx.fillStyle = this.winner.color;
+      ctx.fillText(this.winner.name + " TAKES THE HILL", W / 2, top + 32);
+    } else {
+      ctx.fillStyle = C.gray;
+      ctx.fillText("DRAWN HILL", W / 2, top + 32);
+    }
+    ctx.font = '12px "Courier New", Courier, monospace';
+    let y = top + 58;
+    for (let i = 0; i < this.roundLines.length; i++) {
+      ctx.fillStyle = this.roundLines[i].color;
+      ctx.fillText(this.roundLines[i].name + "  " + this.roundLines[i].text, W / 2, y);
+      y += 16;
+    }
+    ctx.font = '13px "Courier New", Courier, monospace';
+    let score = "SERIES  ";
+    for (let i = 0; i < this.roster.length; i++) {
+      score += this.roster[i].name + " " + this.roster[i].wins + "   ";
+    }
+    ctx.fillStyle = C.white;
+    ctx.fillText(score, W / 2, top + tall - 48);
+    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.fillText(this.seriesOver ? "ENTER  rematch     ESC  title" : "ENTER  shop     ESC  title", W / 2, top + tall - 26);
+  };
+
+  Game.prototype.drawHandoff = function (ctx) {
+    const tank = this.current();
+    ctx.fillStyle = "#000033";
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = tank ? tank.color : C.yellow;
+    ctx.strokeRect(80, 90, 480, 200);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = 'bold 28px "Courier New", Courier, monospace';
-    if (this.winner) {
-      ctx.fillStyle = this.winner.color;
-      ctx.fillText(this.winner.name + " WINS", W / 2, 168);
-    } else {
-      ctx.fillStyle = C.gray;
-      ctx.fillText("DRAW", W / 2, 168);
-    }
-    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.fillStyle = tank ? tank.color : C.white;
+    ctx.fillText((tank ? tank.name : "NEXT") + "  —  LOOK AWAY", W / 2, 150);
+    ctx.font = '14px "Courier New", Courier, monospace';
+    ctx.fillStyle = C.yellow;
+    ctx.fillText("pass the keyboard", W / 2, 190);
     ctx.fillStyle = C.white;
-    ctx.fillText("ENTER  next battle     ESC  title", W / 2, 214);
+    ctx.fillText("ENTER when only you can see the screen", W / 2, 230);
+    ctx.fillStyle = C.dgray;
+    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.fillText(MAP_LABEL[this.mapKind] + "   round " + this.round, W / 2, 262);
+  };
+
+  Game.prototype.drawShop = function (ctx) {
+    this.drawSky(ctx);
+    if (this.height) this.drawTerrain(ctx);
+    ctx.fillStyle = "rgba(0,0,0,0.72)";
+    ctx.fillRect(36, 36, 568, 328);
+    ctx.strokeStyle = C.yellow;
+    ctx.strokeRect(40, 40, 560, 320);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = C.yellow;
+    ctx.font = 'bold 20px "Courier New", Courier, monospace';
+    ctx.fillText("SUPPLY  ·  ROUND " + this.round + " CLEARED", 56, 52);
+    ctx.font = '12px "Courier New", Courier, monospace';
+    let lx = 56;
+    for (let i = 0; i < this.roster.length; i++) {
+      const r = this.roster[i];
+      ctx.fillStyle = r.color;
+      const label = r.name + " $" + r.cash + "  W" + r.wins;
+      ctx.fillText(label, lx, 80);
+      lx += ctx.measureText(label).width + 16;
+    }
+    const buyer = this.roster[this.shopPlayer];
+    ctx.fillStyle = buyer ? buyer.color : C.white;
+    ctx.font = 'bold 16px "Courier New", Courier, monospace';
+    ctx.fillText(buyer ? buyer.name + " BUYING" : "", 56, 108);
+    if (this.shopNote) {
+      ctx.fillStyle = C.lgreen;
+      ctx.font = '12px "Courier New", Courier, monospace';
+      ctx.fillText(this.shopNote, 250, 112);
+    }
+    ctx.font = '14px "Courier New", Courier, monospace';
+    this.shopBoxes = [];
+    for (let i = 0; i < SHOP.length; i++) {
+      const item = SHOP[i];
+      const y = 140 + i * 26;
+      const sel = this.shopCursor === i && buyer && buyer.human && this.shopCpu <= 0;
+      ctx.fillStyle = sel ? C.yellow : C.gray;
+      const have = stockLabel(buyer, item.id);
+      ctx.fillText((sel ? "> " : "  ") + item.name, 64, y);
+      ctx.fillStyle = sel ? C.white : C.lcyan;
+      ctx.fillText("$" + item.cost, 280, y);
+      ctx.fillStyle = C.dgray;
+      ctx.fillText(item.blurb + "   have " + have, 350, y);
+      this.shopBoxes.push({ i: i, y: y, h: 24 });
+    }
+    const doneY = 140 + SHOP.length * 26 + 6;
+    const doneSel = this.shopCursor >= SHOP.length && buyer && buyer.human && this.shopCpu <= 0;
+    ctx.fillStyle = doneSel ? C.yellow : C.white;
+    ctx.fillText((doneSel ? "> " : "  ") + "DONE  —  next tank", 64, doneY);
+    this.shopBoxes.push({ i: SHOP.length, y: doneY, h: 24 });
     ctx.fillStyle = C.dgray;
     ctx.font = '11px "Courier New", Courier, monospace';
-    ctx.fillText("same mode and difficulty", W / 2, 238);
+    ctx.fillText("↑↓ pick    ENTER buy    N done    ESC quits the series", 56, 336);
+  };
+
+  function stockLabel(roster, id) {
+    if (!roster) return "0";
+    if (id === "shield") return String(roster.shields);
+    if (id === "guide") return String(roster.guidance);
+    return String(roster.ammo[weaponIndex(id)] || 0);
+  }
+
+  Game.prototype.drawCallouts = function (ctx) {
+    ctx.font = 'bold 12px "Courier New", Courier, monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < this.callouts.length; i++) {
+      const c = this.callouts[i];
+      ctx.globalAlpha = 1 - c.t / c.life;
+      ctx.fillStyle = c.color;
+      ctx.fillText(c.text, c.x, c.y);
+    }
+    ctx.globalAlpha = 1;
   };
 
   Game.prototype.draw = function () {
@@ -1674,6 +2276,16 @@
       if (!this.height) this.height = generateHeightmap(W, Math.random);
       this.drawTitle(ctx);
       this.drawHud(ctx);
+      return;
+    }
+
+    if (this.mode === "handoff") {
+      this.drawHandoff(ctx);
+      return;
+    }
+
+    if (this.mode === "shop") {
+      this.drawShop(ctx);
       return;
     }
 
@@ -1692,6 +2304,7 @@
     this.drawShots(ctx);
     this.drawExplosions(ctx);
     this.drawParticles(ctx);
+    this.drawCallouts(ctx);
     ctx.restore();
 
     this.drawHud(ctx);
@@ -1712,11 +2325,136 @@
     for (const k in keys) keys[k] = false;
   });
 
-  canvas.addEventListener("mousedown", function () {
+  function canvasPoint(e) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - r.left) / r.width) * W,
+      y: ((e.clientY - r.top) / r.height) * H,
+    };
+  }
+
+  Game.prototype.onPointerDown = function (p, e) {
+    this.pointer.down = true;
+    this.pointer.dragged = false;
+    this.pointer.sx = p.x;
+    this.pointer.sy = p.y;
+    this.pointer.x = p.x;
+    this.pointer.y = p.y;
+    this.pointer.aim = false;
+    if (e && canvas.setPointerCapture) {
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    if (this.mode === "aim") {
+      const tank = this.current();
+      if (tank && tank.human && p.y < H - FOOT && p.y > HUD) {
+        this.pointer.aim = true;
+        this.pointer.power = tank.power;
+      }
+    }
+  };
+
+  Game.prototype.onPointerMove = function (p) {
+    if (!this.pointer.down) return;
+    const dx = p.x - this.pointer.sx;
+    const dy = p.y - this.pointer.sy;
+    if (dx * dx + dy * dy > 64) this.pointer.dragged = true;
+    this.pointer.x = p.x;
+    this.pointer.y = p.y;
+    if (!this.pointer.aim || this.mode !== "aim") return;
+    const tank = this.current();
+    if (!tank || !tank.human) return;
+    const prevA = Math.round(tank.angle);
+    const prevP = Math.round(tank.power);
+    const pivotY = tank.y - 8;
+    let ang = (Math.atan2(pivotY - p.y, p.x - tank.x) * 180) / Math.PI;
+    if (ang < 0) ang = p.x < tank.x ? 180 : 0;
+    tank.angle = clamp(ang, 0, 180);
+    tank.power = clamp(this.pointer.power + (this.pointer.sy - p.y) * 0.55, 10, maxPowerFor(tank));
+    if (Math.round(tank.angle) !== prevA || Math.round(tank.power) !== prevP) Sfx.tick();
+  };
+
+  Game.prototype.onPointerUp = function (p) {
+    const dragged = this.pointer.dragged;
+    const aim = this.pointer.aim;
+    this.pointer.down = false;
+    this.pointer.aim = false;
+    if (this.mode === "title") {
+      this.startSeries();
+      return;
+    }
+    if (this.mode === "handoff") {
+      this.releaseHandoff();
+      return;
+    }
+    if (this.mode === "victory") {
+      if (this.seriesOver) this.startSeries();
+      else this.beginShop();
+      return;
+    }
+    if (this.mode === "shop") {
+      const buyer = this.roster[this.shopPlayer];
+      if (!buyer || !buyer.human || this.shopCpu > 0) return;
+      const boxes = this.shopBoxes || [];
+      for (let i = 0; i < boxes.length; i++) {
+        const b = boxes[i];
+        if (p.y >= b.y - 4 && p.y <= b.y + b.h && p.x > 50 && p.x < 600) {
+          this.shopCursor = b.i;
+          this.tryShopBuy();
+          return;
+        }
+      }
+      return;
+    }
+    if (this.mode === "aim" && this.ai && !dragged) {
+      const cpu = this.current();
+      if (cpu) {
+        cpu.angle = this.ai.angle;
+        cpu.power = this.ai.power;
+        cpu.weapon = this.ai.weapon;
+        this.tryFire();
+      }
+      return;
+    }
+    if (this.mode === "aim" && !dragged) {
+      if (p.y >= H - FOOT) {
+        const boxes = this.weaponBoxes || [];
+        for (let i = 0; i < boxes.length; i++) {
+          const b = boxes[i];
+          if (p.x >= b.x && p.x <= b.x + b.w) {
+            const tank = this.current();
+            if (!tank || !tank.human) return;
+            const w = WEAPONS[b.i];
+            if (w.ammo === Infinity || tank.ammo[b.i] > 0) {
+              tank.weapon = b.i;
+              Sfx.ui();
+            }
+            return;
+          }
+        }
+        return;
+      }
+      if (aim) this.tryFire();
+    }
+  };
+
+  canvas.addEventListener("pointerdown", function (e) {
     Sfx.ensure();
     canvas.focus();
-    if (game.mode === "title") game.newBattle();
-    else if (game.mode === "victory") game.newBattle();
+    game.onPointerDown(canvasPoint(e), e);
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    game.onPointerMove(canvasPoint(e));
+  });
+  canvas.addEventListener("pointerup", function (e) {
+    game.onPointerUp(canvasPoint(e));
+  });
+  canvas.addEventListener("pointercancel", function () {
+    game.pointer.down = false;
+    game.pointer.aim = false;
   });
   canvas.tabIndex = 0;
   canvas.focus();

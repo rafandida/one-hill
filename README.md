@@ -16,6 +16,8 @@ Then visit `http://127.0.0.1:43721/`. No build step, no backend.
 
 ## Modes (title screen)
 
+A match is a **best of 5**: first tank to **3 hill wins** takes the series (or the leader after five hills).
+
 | Setting | Options |
 | --- | --- |
 | **MODE** | **1P vs CPU** — you against one AI tank · **HOTSEAT** — 2–4 humans, same keyboard |
@@ -25,41 +27,59 @@ Then visit `http://127.0.0.1:43721/`. No build step, no backend.
 
 **← →** change the highlighted value · **↑ ↓** move between rows · **Enter** or **click** to start.
 
+Hotseat blanks the field before each human turn (`P2 — LOOK AWAY`). Press **Enter** when the keyboard has been passed.
+
 ## Battle controls
 
-Tanks drop onto a new hillside. On your turn set angle and power, pick a weapon, and fire through the wind.
+Each hill is a new map: **canyon**, **mesa**, or a **water gap** (shells that hit the lake sink). Tanks drop in, then you aim and fire through the wind.
+
+**Mouse:** drag around your tank to set the angle, drag up or down to set power, click to fire. Click a weapon on the bottom strip to select it. Click during a CPU turn to skip to the shot.
 
 | Key | Action |
 | --- | --- |
 | **A / D** or **← →** | Aim angle (0° right, 90° up, 180° left) |
 | **W / S** or **↑ ↓** | Shot power |
 | **Shift** | Nudge angle/power more slowly |
-| **1–5** | Choose weapon |
+| **1–6** | Choose weapon |
 | **[ ]** | Cycle weapons that still have ammo |
-| **Space** or **Enter** | Fire |
-| **T** | Toggle dotted trajectory preview |
+| **Space** or **Enter** | Fire. During a CPU turn, skip straight to the shot |
+| **T** | Toggle the dotted arc. It spends one **guidance** charge when you fire |
 | **M** | Mute / unmute all sound |
-| **Esc** | Back to the title |
+| **Esc** | Back to the title (ends the series) |
 
-A **READY?** banner flashes on each turn. Wind is in the top bar (`<<<` west, `>>>` east) and drifts a little every round. Explosions bite craters; tanks fall if the dirt under them disappears (long drops hurt). Last living tank wins. **Enter** starts another battle on fresh terrain.
+A **READY?** banner flashes on each turn. A near miss prints **CLOSE!** and a shield prints **BLOCKED**. Wind is in the top bar (`<<<` west, `>>>` east). Explosions bite craters; tanks fall if the dirt under them disappears. The bottom strip shows the map, series score, cash, shields, and guidance.
+
+### Shop
+
+Between hills, each tank spends cash. A hill win pays **$700**, a kill **$400**, surviving without the win **$150**. You start with **$250**.
+
+| Item | Cost | What it does |
+| --- | --- | --- |
+| HE BOMB x2 | $400 | Wider craters |
+| MIRV | $500 | Splits into three warheads |
+| DIRT BOMB | $300 | Builds a mound where it lands |
+| GUIDANCE | $200 | One dotted trajectory |
+| SHIELD | $650 | Blocks the next hit, including a fall |
+| NUKE | $1200 | Huge blast |
+
+**↑ ↓** pick, **Enter** buy, **N** finished, or click a row. The CPU buys on its own. Ammo you do not fire carries to the next hill. Crates in a battle still drop extra rounds.
 
 ### Weapons
 
-Shown on the bottom strip. Limited rounds refill from **supply crates** that drop after kills (and sometimes between turns). Drive over a crate — or let it land on you — to collect it.
-
 1. **SHELL** — standard HE, unlimited
-2. **HE BOMB** — fat crater, heavy damage
-3. **MIRV** — splits into three warheads on the way down
-4. **DIGGER** — burrows through dirt, then blows
-5. **NUKE** — rare crate prize; huge blast
+2. **HE** — fat crater
+3. **MIRV** — splits on the way down
+4. **DIG** — burrows, then blows
+5. **NUKE** — shop or crate
+6. **DIRT** — piles dirt instead of digging it
 
 Crew (top-right) is health. Damaged tanks cannot crank the cannon as hard.
 
 ### Sound
 
-All SFX are synthesized (no audio files): fire, explosion, hit, death, UI ticks while you adjust aim, crate pickup, a light wind whoosh, and a win or lose jingle.
+All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, UI ticks while you adjust aim, crate and shop pickups, a light wind whoosh, and a win or lose jingle.
 
-- **M** during play or the **SOUND** row on the title screen
+- **M** during play, or the **SOUND** row on the title screen
 - HUD shows **MUTE** / **SND**
 
 ## Project layout
@@ -67,10 +87,10 @@ All SFX are synthesized (no audio files): fire, explosion, hit, death, UI ticks 
 ```
 index.html      page chrome
 styles.css      monitor bezel, pixel scaling
-js/game.js      the whole game (palette, terrain, weapons, AI, audio, HUD)
+js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD)
 ```
 
-Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it needs special flight, a new `kind` in `stepShots`.
+Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it needs special flight, a new `kind` in `stepShots`. Shop entries live in the `SHOP` array.
 
 ## Credit
 
