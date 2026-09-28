@@ -1057,6 +1057,8 @@
     this.shopCpu = 0;
     this.pointer = { down: false, dragged: false, x: 0, y: 0, sx: 0, sy: 0, power: 60, aim: false };
     this.weaponBoxes = [];
+    this.handoffLock = 0;
+    this.handoffKind = "";
 
     this.rebuildStars();
   }
@@ -1202,7 +1204,15 @@
     this.ai = null;
     this.banner = MAP_LABEL[kind];
     this.bannerT = 1.5;
-    this.mode = "drop";
+    if (this.humanCount > 1) {
+      this.mode = "handoff";
+      this.handoffKind = "open";
+      this.handoffLock = 0.45;
+      flushTaps();
+    } else {
+      this.handoffKind = "";
+      this.mode = "drop";
+    }
   };
 
   function seriesChamp(roster) {
@@ -1363,7 +1373,7 @@
     }
   };
 
-  Game.prototype.nextTurn = function () {
+  Game.prototype.nextTurn = function (opts) {
     const living = this.living();
     if (living.length <= 1) {
       this.enterVictory();
@@ -1400,8 +1410,11 @@
       };
       cur.weapon = plan.weapon;
       this.mode = "aim";
-    } else if (this.humanCount > 1) {
+    } else if (this.humanCount > 1 && !(opts && opts.skipHandoff)) {
       this.mode = "handoff";
+      this.handoffKind = "turn";
+      this.handoffLock = 0.4;
+      flushTaps();
     } else {
       this.mode = "aim";
       Sfx.ui();
@@ -1410,11 +1423,18 @@
 
   Game.prototype.releaseHandoff = function () {
     if (this.mode !== "handoff") return;
+    if (this.handoffLock > 0) return;
+    flushTaps();
+    if (this.handoffKind === "open") {
+      this.handoffKind = "";
+      this.mode = "drop";
+      return;
+    }
+    this.handoffKind = "";
     this.mode = "aim";
     this.banner = this.current().name + "  READY?";
     this.bannerT = 1.05;
     Sfx.ui();
-    flushTaps();
   };
 
   Game.prototype.tryFire = function () {
@@ -1518,6 +1538,13 @@
     const angSpeed = (held("Shift") ? 40 : 70) * dt;
     const powSpeed = (held("Shift") ? 35 : 55) * dt;
 
+    // A tap always steps, even if keyup lands before the next frame.
+    // Left swings the muzzle left (angle rises: 0° flat right, 180° flat left).
+    if (consume("ArrowLeft") || consume("a") || consume("A")) tank.angle += 4;
+    if (consume("ArrowRight") || consume("d") || consume("D")) tank.angle -= 4;
+    if (consume("ArrowUp") || consume("w") || consume("W")) tank.power += 4;
+    if (consume("ArrowDown") || consume("s") || consume("S")) tank.power -= 4;
+
     if (held("ArrowLeft") || held("a") || held("A")) tank.angle += angSpeed;
     if (held("ArrowRight") || held("d") || held("D")) tank.angle -= angSpeed;
     tank.angle = clamp(tank.angle, 0, 180);
@@ -1537,8 +1564,16 @@
     if (consume("[") || consume("{")) this.cycleWeapon(tank, -1);
     if (consume("]") || consume("}")) this.cycleWeapon(tank, 1);
     if (consume("t") || consume("T")) {
-      this.previewOn = !this.previewOn;
-      Sfx.ui();
+      if (tank.guidance <= 0) {
+        this.banner = "NO GUIDANCE";
+        this.bannerT = 0.9;
+        Sfx.deny();
+      } else {
+        this.previewOn = !this.previewOn;
+        this.banner = this.previewOn ? "ARC ON" : "ARC OFF";
+        this.bannerT = 0.7;
+        Sfx.ui();
+      }
     }
     if (consume(" ") || consume("Spacebar") || consume("Enter")) this.tryFire();
   };
@@ -1631,6 +1666,11 @@
     }
 
     if (this.mode === "handoff") {
+      if (this.handoffLock > 0) {
+        this.handoffLock -= dt;
+        flushTaps();
+        return;
+      }
       if (consume("Enter") || consume(" ") || consume("Spacebar")) this.releaseHandoff();
       return;
     }
@@ -1683,7 +1723,7 @@
         }
       } else {
         this.turn = -1;
-        this.nextTurn();
+        this.nextTurn({ skipHandoff: this.humanCount > 1 });
       }
       return;
     }
@@ -2023,9 +2063,10 @@
     ctx.fillText("SH " + tank.shields, sx + 70, y2);
     ctx.fillStyle = tank.guidance > 0 ? C.lgreen : C.dgray;
     ctx.fillText("GD " + tank.guidance, sx + 112, y2);
-    ctx.fillStyle = tank.guidance > 0 && this.previewOn ? C.lgreen : C.dgray;
+    ctx.fillStyle = tank.guidance <= 0 ? C.dgray : this.previewOn ? C.lgreen : C.yellow;
     ctx.textAlign = "right";
-    ctx.fillText(tank.guidance > 0 && this.previewOn ? "ARC ON" : "ARC OFF", W - 6, y2);
+    const arcLabel = tank.guidance <= 0 ? "NO ARC" : this.previewOn ? "ARC ON" : "ARC OFF";
+    ctx.fillText(arcLabel, W - 6, y2);
   };
 
   Game.prototype.drawAimGuide = function (ctx) {
@@ -2046,10 +2087,10 @@
 
     if (!this.previewOn || tank.guidance <= 0) return;
     const pts = previewArc(tank, this.wind, this.height, this.water);
-    ctx.fillStyle = tank.color;
+    ctx.fillStyle = C.white;
     for (let i = 0; i < pts.length; i += 2) {
-      ctx.globalAlpha = 0.25 + (i / pts.length) * 0.45;
-      ctx.fillRect((pts[i] | 0) - 1, (pts[i + 1] | 0) - 1, 2, 2);
+      ctx.globalAlpha = 0.45 + (i / pts.length) * 0.5;
+      ctx.fillRect((pts[i] | 0) - 1, (pts[i + 1] | 0) - 1, 3, 3);
     }
     ctx.globalAlpha = 1;
   };

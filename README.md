@@ -27,7 +27,7 @@ A match is a **best of 5**: first tank to **3 hill wins** takes the series (or t
 
 **← →** change the highlighted value · **↑ ↓** move between rows · **Enter** or **click** to start.
 
-Hotseat blanks the field before each human turn (`P2 — LOOK AWAY`). Press **Enter** when the keyboard has been passed.
+Hotseat opens on `P1 — LOOK AWAY` before the hill is shown, then blanks again before every later human turn. Press **Enter** when the keyboard has been passed.
 
 ## Battle controls
 
@@ -37,13 +37,13 @@ Each hill is a new map: **canyon**, **mesa**, or a **water gap** (shells that hi
 
 | Key | Action |
 | --- | --- |
-| **A / D** or **← →** | Aim angle (0° right, 90° up, 180° left) |
-| **W / S** or **↑ ↓** | Shot power |
+| **A / D** or **← →** | Swing the muzzle. Left aims left (the angle number rises; 0° is flat right, 180° is flat left). A tap steps it; hold to sweep |
+| **W / S** or **↑ ↓** | Shot power. A tap steps by 4; hold to sweep |
 | **Shift** | Nudge angle/power more slowly |
 | **1–6** | Choose weapon |
 | **[ ]** | Cycle weapons that still have ammo |
 | **Space** or **Enter** | Fire. During a CPU turn, skip straight to the shot |
-| **T** | Toggle the dotted arc. It spends one **guidance** charge when you fire |
+| **T** | Toggle the dotted arc while you have guidance. Firing with it on spends one charge. With none left, the banner says NO GUIDANCE |
 | **M** | Mute / unmute all sound |
 | **Esc** | Back to the title (ends the series) |
 
