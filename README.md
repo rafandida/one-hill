@@ -33,7 +33,9 @@ Hotseat opens on `P1 — LOOK AWAY` before the hill is shown, then blanks again 
 
 Each hill is a new map: **canyon**, **mesa**, or a **water gap** (shells that hit the lake sink). Tanks drop in, then you aim and fire through the wind.
 
-**Mouse:** drag around your tank to set the angle, drag up or down to set power, click to fire. Click a weapon on the bottom strip to select it. Click during a CPU turn to skip to the shot.
+**Mouse:** drag around your tank to set the angle, drag up or down to set power, click to fire. A short arc is always drawn so you can see the shot leave the barrel. **T** extends it all the way to the landing, and that spends one guidance charge. Click a weapon on the bottom strip to select it. Click during a CPU turn to skip to the shot.
+
+A centered hit kills. A graze takes a chunk and prints the damage. An HE bomb on the hull ends the tank. Shots fly quickly, and the next turn starts as soon as the shell lands.
 
 | Key | Action |
 | --- | --- |

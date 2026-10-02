@@ -40,7 +40,7 @@
   const WIND_K = 16;
   const TANK_W = 16;
   const TANK_H = 10;
-  const MAX_HP = 100;
+  const MAX_HP = 80;
   const CREW_MAX = 8;
 
   const PLAYER_COLORS = [C.lcyan, C.lmag, C.yellow, C.lgreen];
@@ -55,7 +55,7 @@
       key: "1",
       ammo: Infinity,
       radius: 14,
-      damage: 46,
+      damage: 62,
       kind: "blast",
     },
     {
@@ -64,7 +64,7 @@
       key: "2",
       ammo: 2,
       radius: 28,
-      damage: 78,
+      damage: 96,
       kind: "blast",
     },
     {
@@ -73,7 +73,7 @@
       key: "3",
       ammo: 1,
       radius: 12,
-      damage: 40,
+      damage: 36,
       kind: "mirv",
     },
     {
@@ -82,7 +82,7 @@
       key: "4",
       ammo: 2,
       radius: 18,
-      damage: 58,
+      damage: 72,
       kind: "digger",
     },
     {
@@ -116,7 +116,7 @@
     { id: "bomb", name: "HE BOMB x2", cost: 400, blurb: "wide craters" },
     { id: "mirv", name: "MIRV", cost: 500, blurb: "splits three ways" },
     { id: "dirt", name: "DIRT BOMB", cost: 300, blurb: "piles a mound" },
-    { id: "guide", name: "GUIDANCE", cost: 200, blurb: "one dotted arc" },
+    { id: "guide", name: "GUIDANCE", cost: 200, blurb: "full arc to the hit" },
     { id: "shield", name: "SHIELD", cost: 650, blurb: "blocks the next hit" },
     { id: "nuke", name: "NUKE", cost: 1200, blurb: "do not miss" },
   ];
@@ -642,8 +642,10 @@
       const reach = r + 10;
       if (d < reach) {
         const falloff = 1 - d / reach;
-        const dmg = Math.round(weapon.damage * (0.35 + 0.65 * falloff));
-        const res = hurt(game, t, dmg, owner);
+        const direct = falloff > 0.82;
+        let dmg = Math.round(weapon.damage * (0.35 + 0.65 * falloff));
+        if (direct) dmg = Math.round(dmg * 1.35);
+        const res = hurt(game, t, dmg, owner, direct);
         if (res === "hit") punched = true;
       } else if (d < reach + 40) {
         callout(game, t.x, t.y - 24, "CLOSE!", C.yellow);
@@ -656,13 +658,13 @@
       y: cy,
       r: r,
       t: 0,
-      life: r > 36 ? 0.55 : 0.38,
+      life: r > 36 ? 0.32 : 0.2,
       big: r > 20,
     });
     Sfx.explode(r > 20);
   }
 
-  function hurt(game, tank, dmg, owner) {
+  function hurt(game, tank, dmg, owner, direct) {
     if (!tank.alive || dmg <= 0) return null;
     if (tank.shields > 0) {
       tank.shields--;
@@ -681,6 +683,7 @@
     }
     tank.hp = Math.max(0, tank.hp - dmg);
     tank.flash = 0.2;
+    callout(game, tank.x, tank.y - 28, direct ? "DIRECT HIT" : "-" + dmg, direct ? C.yellow : C.lred);
     burst(game, tank.x, tank.y - 6, 8, {
       colors: [tank.color, C.white, C.yellow],
       spd: 80,
@@ -801,6 +804,7 @@
   }
 
   function stepShots(game, dt) {
+    dt *= 1.6;
     const sub = 6;
     const sdt = dt / sub;
     for (let i = game.shots.length - 1; i >= 0; i--) {
@@ -1199,11 +1203,11 @@
       });
     }
     this.dropIndex = 0;
-    this.dropWait = 0.15;
+    this.dropWait = 0.04;
     this.turn = 0;
     this.ai = null;
     this.banner = MAP_LABEL[kind];
-    this.bannerT = 1.5;
+    this.bannerT = 0.8;
     if (this.humanCount > 1) {
       this.mode = "handoff";
       this.handoffKind = "open";
@@ -1399,14 +1403,14 @@
     this.ai = null;
     this.turnNumber++;
     this.banner = cur.name + "  READY?";
-    this.bannerT = 1.15;
+    this.bannerT = 0.55;
     if (!cur.human) {
       const plan = aiChoose(this, cur);
       this.ai = {
         angle: plan.angle,
         power: plan.power,
         weapon: plan.weapon,
-        think: 0.18,
+        think: 0.05,
       };
       cur.weapon = plan.weapon;
       this.mode = "aim";
@@ -1440,7 +1444,6 @@
   Game.prototype.tryFire = function () {
     const tank = this.current();
     if (!tank || !tank.alive || this.mode !== "aim") return;
-    if (this.bannerT > 0.85 && tank.human) return;
     if (tank.human && tank.guidance > 0 && this.previewOn) tank.guidance--;
     const w = WEAPONS[tank.weapon];
     if (w.ammo !== Infinity) {
@@ -1479,7 +1482,6 @@
             bit.y += bit.vy * dt;
           }
         }
-        busy = true;
       }
       if (!t.alive && t.death <= 0) continue;
       const ground = surfaceY(this.height, t.x) - 1;
@@ -1701,7 +1703,7 @@
           if (!t.dropped) {
             t.dropped = true;
             t.falling = true;
-            t.vy = 20;
+            t.vy = 140;
             Sfx.fall();
           }
           const ground = surfaceY(this.height, t.x) - 1;
@@ -1718,7 +1720,7 @@
               life: 0.25,
             });
             this.dropIndex++;
-            this.dropWait = 0.22;
+            this.dropWait = 0.05;
           }
         }
       } else {
@@ -1772,7 +1774,7 @@
     if (this.mode === "settle") {
       const busy = this.settleTanks(dt);
       stepShots(this, dt);
-      if (!busy && this.shots.length === 0 && this.explosions.length === 0 && this.particles.length < 8) {
+      if (!busy && this.shots.length === 0 && this.explosions.length === 0) {
         const living = this.living();
         if (living.length <= 1) this.enterVictory();
         else this.nextTurn();
@@ -1794,6 +1796,18 @@
       const s = this.stars[i];
       ctx.fillStyle = s.c;
       ctx.fillRect(s.x, s.y, 1, 1);
+    }
+    if (this.wind) {
+      const dir = this.wind < 0 ? -1 : 1;
+      const span = 10 + Math.abs(this.wind) * 2;
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = this.wind < 0 ? C.lcyan : C.lmag;
+      for (let i = 0; i < 4; i++) {
+        const travel = (this.time * 70 * dir + i * 160) % (W + 80);
+        const x = dir < 0 ? W - travel : travel - 40;
+        ctx.fillRect(x, PLAY_TOP + 30 + i * 36, span, 1);
+      }
+      ctx.globalAlpha = 1;
     }
   };
 
@@ -2085,12 +2099,13 @@
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
-    if (!this.previewOn || tank.guidance <= 0) return;
     const pts = previewArc(tank, this.wind, this.height, this.water);
-    ctx.fillStyle = C.white;
-    for (let i = 0; i < pts.length; i += 2) {
-      ctx.globalAlpha = 0.45 + (i / pts.length) * 0.5;
-      ctx.fillRect((pts[i] | 0) - 1, (pts[i + 1] | 0) - 1, 3, 3);
+    const full = this.previewOn && tank.guidance > 0;
+    const limit = full ? pts.length : Math.min(pts.length, 8);
+    for (let i = 0; i < limit; i += 2) {
+      ctx.globalAlpha = full ? 0.45 + (i / pts.length) * 0.5 : 0.35;
+      ctx.fillStyle = full ? C.white : tank.color;
+      ctx.fillRect((pts[i] | 0) - 1, (pts[i + 1] | 0) - 1, full ? 3 : 2, full ? 3 : 2);
     }
     ctx.globalAlpha = 1;
   };
@@ -2162,7 +2177,7 @@
     ctx.fillText("← → change    ↑ ↓ select row    ENTER start", W / 2, 258);
     ctx.fillStyle = C.gray;
     ctx.font = '11px "Courier New", Courier, monospace';
-    ctx.fillText("Drag to aim, click to fire.  Keys still work.  Best of 5.", W / 2, 278);
+    ctx.fillText("Drag to aim. A short arc is free.  A clean hit ends a tank.", W / 2, 278);
     ctx.fillText("A/D angle  W/S power  SPACE fire  1-6 weapons  T arc  M mute", W / 2, 298);
     ctx.fillStyle = C.dgray;
     ctx.fillText("Kills pay. Shop between hills. Water swallows shells.", W / 2, 322);
