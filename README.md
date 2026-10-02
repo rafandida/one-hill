@@ -42,7 +42,7 @@ A centered hit kills. A graze takes a chunk and prints the damage. An HE bomb on
 | **A / D** or **← →** | Swing the muzzle. Left aims left (the angle number rises; 0° is flat right, 180° is flat left). A tap steps it; hold to sweep |
 | **W / S** or **↑ ↓** | Shot power. A tap steps by 4; hold to sweep |
 | **Shift** | Nudge angle/power more slowly |
-| **1–6** | Choose weapon |
+| **1–6** or **click a weapon button** | Choose weapon. The bottom bar names each one and describes the one you picked |
 | **[ ]** | Cycle weapons that still have ammo |
 | **Space** or **Enter** | Fire. During a CPU turn, skip straight to the shot |
 | **T** | Toggle the dotted arc while you have guidance. Firing with it on spends one charge. With none left, the banner says NO GUIDANCE |

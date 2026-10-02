@@ -32,7 +32,7 @@
   const W = 640;
   const H = 400;
   const HUD = 28;
-  const FOOT = 34;
+  const FOOT = 46;
   const PLAY_TOP = HUD;
   const PLAY_H = H - HUD;
   const GRAVITY = 240;
@@ -52,6 +52,7 @@
     {
       id: "shell",
       name: "SHELL",
+      blurb: "SHELL — standard shot. Dead center kills.",
       key: "1",
       ammo: Infinity,
       radius: 14,
@@ -61,6 +62,7 @@
     {
       id: "bomb",
       name: "HE BOMB",
+      blurb: "HE BOMB — wide crater. A solid hit kills.",
       key: "2",
       ammo: 2,
       radius: 28,
@@ -70,6 +72,7 @@
     {
       id: "mirv",
       name: "MIRV",
+      blurb: "MIRV — splits into three shells on the way down.",
       key: "3",
       ammo: 1,
       radius: 12,
@@ -79,6 +82,7 @@
     {
       id: "digger",
       name: "DIGGER",
+      blurb: "DIGGER — burrows through the hill, then blows.",
       key: "4",
       ammo: 2,
       radius: 18,
@@ -89,6 +93,7 @@
       id: "nuke",
       name: "NUKE",
       short: "NUKE",
+      blurb: "NUKE — huge blast. Buy one, or catch a crate.",
       key: "5",
       ammo: 0,
       radius: 46,
@@ -99,6 +104,7 @@
       id: "dirt",
       name: "DIRT",
       short: "DIRT",
+      blurb: "DIRT — piles a mound where it lands.",
       key: "6",
       ammo: 1,
       radius: 26,
@@ -2026,7 +2032,7 @@
 
   Game.prototype.drawWeaponBar = function (ctx) {
     if (this.mode === "title" || this.mode === "handoff" || this.mode === "shop") return;
-    ctx.fillStyle = "#222222";
+    ctx.fillStyle = "#111111";
     ctx.fillRect(0, H - FOOT, W, FOOT);
     ctx.fillStyle = C.dgray;
     ctx.fillRect(0, H - FOOT, W, 1);
@@ -2034,53 +2040,49 @@
     const tank = this.current();
     this.weaponBoxes = [];
     if (!tank) return;
+
+    const n = WEAPONS.length;
+    const gap = 3;
+    const bw = Math.floor((W - 8 - gap * (n - 1)) / n);
+    const by = H - FOOT + 3;
+    const bh = 18;
     ctx.font = '11px "Courier New", Courier, monospace';
     ctx.textBaseline = "middle";
-    ctx.textAlign = "left";
-    let x = 4;
-    const rowY = H - FOOT + 8;
-    for (let i = 0; i < WEAPONS.length; i++) {
+    ctx.textAlign = "center";
+    for (let i = 0; i < n; i++) {
       const w = WEAPONS[i];
+      const x = 4 + i * (bw + gap);
       const ammo = w.ammo === Infinity ? "∞" : String(tank.ammo[i]);
       const empty = w.ammo !== Infinity && tank.ammo[i] <= 0;
       const sel = tank.weapon === i;
-      const label = i + 1 + " " + (w.short || w.name) + " " + ammo;
-      const tw = ctx.measureText(label).width + 8;
       if (sel) {
         ctx.fillStyle = tank.color;
-        ctx.fillRect(x, H - FOOT + 2, tw, 14);
+        ctx.fillRect(x, by, bw, bh);
         ctx.fillStyle = C.black;
       } else {
-        ctx.fillStyle = empty ? C.dgray : C.gray;
+        ctx.fillStyle = empty ? "#2a2a2a" : "#3a3a3a";
+        ctx.fillRect(x, by, bw, bh);
+        ctx.fillStyle = empty ? C.dgray : C.white;
       }
-      ctx.fillText(label, x + 4, rowY);
-      this.weaponBoxes.push({ i: i, x: x, w: tw });
-      x += tw + 4;
+      ctx.fillText(i + 1 + " " + w.name + " " + ammo, x + bw / 2, by + bh / 2);
+      this.weaponBoxes.push({ i: i, x: x, w: bw, y: by, h: bh });
     }
 
-    ctx.font = '10px "Courier New", Courier, monospace';
-    const y2 = H - 8;
-    ctx.fillStyle = C.lcyan;
-    ctx.fillText(MAP_LABEL[this.mapKind] + "  R" + this.round, 6, y2);
-    let sx = 118;
-    for (let i = 0; i < this.roster.length; i++) {
-      const r = this.roster[i];
-      ctx.fillStyle = r.color;
-      const bit = r.wins + (i < this.roster.length - 1 ? "-" : "");
-      ctx.fillText(bit, sx, y2);
-      sx += ctx.measureText(bit).width;
-    }
-    const purse = this.roster[tank.id];
-    ctx.fillStyle = C.yellow;
-    ctx.fillText("$" + (purse ? purse.cash : 0), sx + 10, y2);
-    ctx.fillStyle = tank.shields > 0 ? C.lcyan : C.dgray;
-    ctx.fillText("SH " + tank.shields, sx + 70, y2);
-    ctx.fillStyle = tank.guidance > 0 ? C.lgreen : C.dgray;
-    ctx.fillText("GD " + tank.guidance, sx + 112, y2);
-    ctx.fillStyle = tank.guidance <= 0 ? C.dgray : this.previewOn ? C.lgreen : C.yellow;
+    const chosen = WEAPONS[tank.weapon];
+    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = tank.color;
+    ctx.fillText(chosen.blurb || chosen.name, 6, H - 10);
+
     ctx.textAlign = "right";
-    const arcLabel = tank.guidance <= 0 ? "NO ARC" : this.previewOn ? "ARC ON" : "ARC OFF";
-    ctx.fillText(arcLabel, W - 6, y2);
+    let status = MAP_LABEL[this.mapKind] + " R" + this.round + "  ";
+    for (let i = 0; i < this.roster.length; i++) status += this.roster[i].wins + (i < this.roster.length - 1 ? "-" : "");
+    const purse = this.roster[tank.id];
+    status += "  $" + (purse ? purse.cash : 0);
+    status += "  SH" + tank.shields + " GD" + tank.guidance;
+    ctx.fillStyle = C.gray;
+    ctx.fillText(status, W - 6, H - 10);
   };
 
   Game.prototype.drawAimGuide = function (ctx) {
@@ -2486,7 +2488,13 @@
             const w = WEAPONS[b.i];
             if (w.ammo === Infinity || tank.ammo[b.i] > 0) {
               tank.weapon = b.i;
+              this.banner = w.name;
+              this.bannerT = 0.45;
               Sfx.ui();
+            } else {
+              this.banner = "NO " + w.name;
+              this.bannerT = 0.6;
+              Sfx.deny();
             }
             return;
           }
