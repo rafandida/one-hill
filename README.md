@@ -20,8 +20,9 @@ A match is a **best of 5**: first tank to **3 hill wins** takes the series (or t
 
 | Setting | Options |
 | --- | --- |
-| **MODE** | **1P vs CPU** — you against one AI tank · **HOTSEAT** — 2–4 humans, same keyboard |
-| **DIFFICULTY** | (vs CPU) Easy / Normal / Hard — AI names *Rookie*, *Lobber*, *Windmaster* |
+| **MODE** | **1P vs CPU** — you against 1–3 AI tanks · **HOTSEAT** — 2–4 humans, same keyboard |
+| **DIFFICULTY** | (vs CPU) Easy / Normal / Hard — a lone AI is named *Rookie*, *Lobber*, or *Windmaster* |
+| **CPU TANKS** | (vs CPU) 1, 2, or 3. With more than one it is a free-for-all: *Viper*, *Hammer*, and *Brutus* shoot whoever is closest, including each other |
 | **PLAYERS** | (hotseat) 2, 3, or 4 |
 | **SOUND** | On / Off |
 
@@ -64,7 +65,7 @@ Between hills, each tank spends cash. A hill win pays **$700**, a kill **$400**,
 | SHIELD | $650 | Blocks the next hit, including a fall |
 | NUKE | $1200 | Huge blast |
 
-**↑ ↓** pick, **Enter** buy, **N** finished, or click a row. The CPU buys on its own. Ammo you do not fire carries to the next hill. Crates in a battle still drop extra rounds.
+**↑ ↓** pick, **Enter** buy, **N** finished, or click a row. CPU tanks buy on their own. Ammo you do not fire carries to the next hill. Crates in a battle still drop extra rounds.
 
 ### Weapons
 

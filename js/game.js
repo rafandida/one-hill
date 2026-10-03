@@ -47,6 +47,7 @@
   const PLAYER_DIM = [C.cyan, C.magenta, C.brown, C.green];
   const DIFF_NAMES = ["ROOKIE", "LOBBER", "WINDMASTER"];
   const DIFF_LABELS = ["EASY", "NORMAL", "HARD"];
+  const CPU_CALLSIGNS = ["VIPER", "HAMMER", "BRUTUS"];
 
   const WEAPONS = [
     {
@@ -1030,6 +1031,7 @@
     this.playMode = "cpu";
     this.difficulty = 1;
     this.hotseatPlayers = 2;
+    this.cpuCount = 1;
     this.titleRow = 0;
 
     this.height = null;
@@ -1075,8 +1077,7 @@
   }
 
   Game.prototype.titleRows = function () {
-    if (this.playMode === "cpu") return 3;
-    return 3;
+    return this.playMode === "cpu" ? 4 : 3;
   };
 
   Game.prototype.rebuildStars = function () {
@@ -1103,7 +1104,7 @@
 
   Game.prototype.applyModeCounts = function () {
     if (this.playMode === "cpu") {
-      this.tankCount = 2;
+      this.tankCount = 1 + this.cpuCount;
       this.humanCount = 1;
     } else {
       this.tankCount = this.hotseatPlayers;
@@ -1120,7 +1121,11 @@
       const human = i < humans;
       this.roster.push({
         id: i,
-        name: human ? "P" + (i + 1) : DIFF_NAMES[this.difficulty],
+        name: human
+          ? "P" + (i + 1)
+          : n - humans === 1
+            ? DIFF_NAMES[this.difficulty]
+            : CPU_CALLSIGNS[i - humans],
         color: PLAYER_COLORS[i],
         dim: PLAYER_DIM[i],
         human: human,
@@ -1603,6 +1608,10 @@
         if (this.hotseatPlayers < 2) this.hotseatPlayers = 4;
         if (this.hotseatPlayers > 4) this.hotseatPlayers = 2;
       }
+    } else if (this.titleRow === 2 && this.playMode === "cpu") {
+      this.cpuCount += dir;
+      if (this.cpuCount < 1) this.cpuCount = 3;
+      if (this.cpuCount > 3) this.cpuCount = 1;
     } else {
       Sfx.muted = !Sfx.muted;
     }
@@ -2160,16 +2169,23 @@
       this.playMode === "cpu"
         ? { label: "DIFFICULTY", value: DIFF_LABELS[this.difficulty], hint: DIFF_NAMES[this.difficulty] }
         : { label: "PLAYERS", value: String(this.hotseatPlayers), hint: "same keyboard" };
-    const rows = [
-      { label: "MODE", value: modeVal, hint: this.playMode === "cpu" ? "you vs AI" : "2–4 humans" },
-      row1,
-      { label: "SOUND", value: Sfx.muted ? "OFF" : "ON", hint: "M mutes anytime" },
-    ];
+    const modeHint =
+      this.playMode !== "cpu" ? "2–4 humans" : this.cpuCount === 1 ? "you vs AI" : "free-for-all";
+    const rows = [{ label: "MODE", value: modeVal, hint: modeHint }, row1];
+    if (this.playMode === "cpu") {
+      rows.push({
+        label: "CPU TANKS",
+        value: String(this.cpuCount),
+        hint: this.cpuCount + 1 + " tanks on the hill",
+      });
+    }
+    rows.push({ label: "SOUND", value: Sfx.muted ? "OFF" : "ON", hint: "M mutes anytime" });
 
     ctx.font = '14px "Courier New", Courier, monospace';
     ctx.textAlign = "left";
+    const rowGap = rows.length > 3 ? 24 : 30;
     for (let i = 0; i < rows.length; i++) {
-      const y = 158 + i * 30;
+      const y = 152 + i * rowGap;
       const sel = this.titleRow === i;
       ctx.fillStyle = sel ? C.yellow : C.gray;
       ctx.fillText((sel ? "> " : "  ") + rows[i].label, 130, y);
@@ -2267,13 +2283,18 @@
     ctx.font = 'bold 20px "Courier New", Courier, monospace';
     ctx.fillText("SUPPLY  ·  ROUND " + this.round + " CLEARED", 56, 52);
     ctx.font = '12px "Courier New", Courier, monospace';
+    const labels = this.roster.map(function (r) {
+      return r.name + " $" + r.cash + "  W" + r.wins;
+    });
+    const widthAll = labels.reduce(function (s, l) {
+      return s + ctx.measureText(l).width + 16;
+    }, 0);
+    if (widthAll > 536) ctx.font = '10px "Courier New", Courier, monospace';
     let lx = 56;
     for (let i = 0; i < this.roster.length; i++) {
-      const r = this.roster[i];
-      ctx.fillStyle = r.color;
-      const label = r.name + " $" + r.cash + "  W" + r.wins;
-      ctx.fillText(label, lx, 80);
-      lx += ctx.measureText(label).width + 16;
+      ctx.fillStyle = this.roster[i].color;
+      ctx.fillText(labels[i], lx, 80);
+      lx += ctx.measureText(labels[i]).width + 12;
     }
     const buyer = this.roster[this.shopPlayer];
     ctx.fillStyle = buyer ? buyer.color : C.white;
