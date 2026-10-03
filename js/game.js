@@ -971,10 +971,11 @@
     }
 
     const diff = game.difficulty;
-    const windUse = game.wind * [0.2, 1, 1][diff];
+    const misread = [0, 1.6, 0.7][diff] * (Math.random() * 2 - 1);
+    const windUse = game.wind * [0.2, 1, 1][diff] + misread;
     const coarse = [6, 4, 3][diff];
-    const slopA = [16, 5, 1][diff];
-    const slopP = [18, 7, 2][diff];
+    const slopA = [16, 4, 2][diff];
+    const slopP = [18, 6, 3][diff];
 
     const muz = muzzle(tank);
     const facingRight = target.x >= tank.x;
@@ -1174,7 +1175,7 @@
     this.roundScored = false;
     this.roundLines = [];
     this.wind = irand(-9, 9);
-    if (this.wind === 0) this.wind = irand(0, 1) ? 1 : -1;
+    if (Math.abs(this.wind) < 2) this.wind = irand(0, 1) ? 2 : -2;
 
     this.tanks = [];
     for (let i = 0; i < this.roster.length; i++) {
@@ -1389,8 +1390,13 @@
       this.enterVictory();
       return;
     }
-    this.wind = clamp(this.wind + irand(-3, 3), -12, 12);
-    if (this.wind === 0) this.wind = Math.random() < 0.5 ? -1 : 1;
+    // Shift hard enough that last turn's winning aim usually misses now.
+    const before = this.wind;
+    if (Math.random() < 0.25) this.wind = irand(-12, 12);
+    else this.wind = clamp(this.wind + irand(-5, 5), -12, 12);
+    if (Math.abs(this.wind) < 2) this.wind = this.wind < 0 ? -2 : 2;
+    const windShift = Math.abs(this.wind - before) >= 5;
+    this.windShift = windShift;
     if (Math.abs(this.wind) >= 4) Sfx.whoosh(this.wind);
 
     if (this.pendingCrate || (this.turnNumber > 0 && this.turnNumber % 3 === 0 && Math.random() < 0.65)) {
@@ -1408,8 +1414,8 @@
     cur.power = clamp(cur.power, 10, maxPowerFor(cur));
     this.ai = null;
     this.turnNumber++;
-    this.banner = cur.name + "  READY?";
-    this.bannerT = 0.55;
+    this.banner = cur.name + (windShift ? "  WIND SHIFT" : "  READY?");
+    this.bannerT = windShift ? 0.9 : 0.55;
     if (!cur.human) {
       const plan = aiChoose(this, cur);
       this.ai = {
@@ -1442,7 +1448,7 @@
     }
     this.handoffKind = "";
     this.mode = "aim";
-    this.banner = this.current().name + "  READY?";
+    this.banner = this.current().name + (this.windShift ? "  WIND SHIFT" : "  READY?");
     this.bannerT = 1.05;
     Sfx.ui();
   };
