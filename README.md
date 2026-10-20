@@ -6,13 +6,33 @@ All graphics and sounds are original. Beeps are generated in the browser (Web Au
 
 ## Run it
 
-Open `index.html` in a browser, or serve the folder:
+Open `index.html` (the front page) or `play.html` (straight into the game) in a browser, or serve the folder:
 
 ```bash
 python3 -m http.server 43721
 ```
 
 Then visit `http://127.0.0.1:43721/`. No build step, no backend. Online play needs an internet connection (see below); everything else runs offline.
+
+## Front page
+
+`index.html` is a landing page built as a cross-section of the battlefield: a night sky and hill on top, then one soil layer per section down to bedrock, with the content in DOS-style text-mode windows.
+
+- The hero is playable. Click or tap anywhere (or focus it and press Enter) to lob a shell at the logo. Go quiet and the CPU tank shoots it instead. The logo rebuilds itself a pixel at a time.
+- The beige monitor runs the real game in attract mode (`play.html?demo`: three CPU tanks on HARD, muted). It only loads while it is on screen. With reduced motion turned on, a still frame (`img/demo.png`) is shown instead.
+- The setup dialog, the invite-code box, and the blast-radius chart all link into the game. Keycaps on the page press down when you press the real key.
+- Sound is off until the **SND** button in the menu bar turns it on.
+
+Links that work on `play.html`:
+
+| URL | Opens |
+| --- | --- |
+| `play.html?mode=cpu` / `hotseat` / `online` | the title screen with that mode picked |
+| `play.html?host` | a new online room straight away |
+| `play.html?room=K7Q4M` | the join screen, already dialling that room |
+| `play.html?demo` | attract mode, CPU vs CPU |
+
+A `?room=` link that lands on `index.html` is forwarded to the game.
 
 ## Modes (title screen)
 
@@ -34,7 +54,7 @@ Hotseat opens on `P1 — LOOK AWAY` before the hill is shown, then blanks again 
 ## Online play
 
 1. One player picks **ONLINE → HOST**. The room screen shows a five-letter **invite code** (no I, O, 0 or 1, so it is easy to read out).
-2. Friends either open the **invite link** (`…/index.html?room=K7Q4M`, copied with **C** or the **COPY LINK** button; phones get the share sheet) or pick **ONLINE → JOIN** and type the code. Pasting the code or the whole link works too.
+2. Friends either open the **invite link** (`…/play.html?room=K7Q4M`, copied with **C** or the **COPY LINK** button; phones get the share sheet) or pick **ONLINE → JOIN** and type the code. Pasting the code or the whole link works too.
 3. The host can fill empty seats with **CPU TANKS** (and pick their difficulty), then presses **Enter** / **START**. Up to four tanks in total.
 
 How it plays:
@@ -114,10 +134,16 @@ All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, U
 ## Project layout
 
 ```
-index.html      page chrome
-styles.css      monitor bezel, pixel scaling
+index.html      front page
+landing.css     front page styles (VGA palette, soil layers, text-mode windows)
+js/landing.js   front page toys (shootable logo, attract monitor, join box, blast chart)
+play.html       the game page
+styles.css      game page: monitor bezel, pixel scaling
 js/net.js       online transport (PeerJS loader, invite codes, peer links)
 js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
+favicon.svg     pixel tank icon
+img/demo.png    a real frame from the game, used when motion is reduced
+fonts/          VT323 (SIL Open Font License, see VT323-OFL.txt)
 ```
 
 Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it needs special flight, a new `kind` in `stepShots`. Shop entries live in the `SHOP` array.

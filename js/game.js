@@ -1093,6 +1093,8 @@
     this.clock = 0;
     this.waitT = 0;
     this.shopReady = false;
+    this.demo = false;
+    this.demoT = 0;
 
     this.rebuildStars();
   }
@@ -1124,7 +1126,10 @@
   };
 
   Game.prototype.applyModeCounts = function () {
-    if (this.net) {
+    if (this.demo) {
+      this.tankCount = CPU_CALLSIGNS.length;
+      this.humanCount = 0;
+    } else if (this.net) {
       this.humanCount = this.net.seats.length;
       this.tankCount = Math.min(MAX_TANKS, this.humanCount + this.netCpu);
     } else if (this.playMode === "cpu") {
@@ -1416,7 +1421,7 @@
     this.shopNote = "";
     if (!r.human) {
       this.shopNote = cpuPurchase(r, this.difficulty);
-      this.shopCpu = 1.05;
+      this.shopCpu = this.demo ? 0.5 : 1.05;
       Sfx.ui();
     } else {
       this.shopCpu = 0;
@@ -1849,7 +1854,13 @@
     }
 
     if (this.mode === "victory") {
-      if (consume("Enter") || consume(" ") || consume("Spacebar")) this.leaveVictory();
+      if (this.demo) {
+        this.demoT += dt;
+        if (this.demoT > 2.6) {
+          this.demoT = 0;
+          this.leaveVictory();
+        }
+      } else if (consume("Enter") || consume(" ") || consume("Spacebar")) this.leaveVictory();
       return;
     }
 
@@ -3689,7 +3700,30 @@
     game.pointer.aim = false;
   });
   canvas.tabIndex = 0;
-  canvas.focus();
+
+  // Landing-page shortcuts: ?demo (attract mode for the embedded monitor),
+  // ?host (open a room straight away), ?mode=cpu|hotseat|online (preselect).
+  const params = new URLSearchParams(location.search);
+  if (params.has("demo")) {
+    game.demo = true;
+    game.demoT = 0;
+    game.difficulty = 2;
+    Sfx.muted = true;
+    document.body.classList.add("demo");
+    game.startSeries();
+  } else {
+    canvas.focus();
+    const preset = params.get("mode");
+    if (preset === "cpu" || preset === "hotseat" || (preset === "online" && window.TankNet)) game.playMode = preset;
+    if (params.has("host") && window.TankNet) {
+      params.delete("host");
+      const rest = params.toString();
+      history.replaceState(null, "", location.pathname + (rest ? "?" + rest : ""));
+      game.playMode = "online";
+      game.onlineRole = "host";
+      game.hostOnline();
+    }
+  }
 
   window.addEventListener("paste", function (e) {
     if (game.mode !== "join" || game.net) return;

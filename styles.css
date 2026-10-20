@@ -69,3 +69,31 @@ body {
     font-size: 10px;
   }
 }
+
+/* ?demo: bare screen for the landing page's attract-mode monitor */
+body.demo {
+  padding: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.demo #monitor {
+  box-shadow: none;
+}
+
+body.demo #game {
+  width: 100vw;
+}
+
+body.demo #hint {
+  display: none;
+}
+
+#hint a {
+  color: #00aaaa;
+}
+
+#hint a:hover,
+#hint a:focus-visible {
+  color: #55ffff;
+}
