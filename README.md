@@ -6,13 +6,33 @@ All graphics and sounds are original. Beeps are generated in the browser (Web Au
 
 ## Run it
 
-Open `index.html` in a browser, or serve the folder:
+Open `index.html` (the front page) or `play.html` (straight into the game) in a browser, or serve the folder:
 
 ```bash
 python3 -m http.server 43721
 ```
 
-Then visit `http://127.0.0.1:43721/`. No build step, no backend.
+Then visit `http://127.0.0.1:43721/`. No build step, no backend. Online play needs an internet connection (see below); everything else runs offline.
+
+## Front page
+
+`index.html` is a landing page built as a cross-section of the battlefield: a night sky and hill on top, then one soil layer per section down to bedrock, with the content in DOS-style text-mode windows.
+
+- The hero is playable. Click or tap anywhere (or focus it and press Enter) to lob a shell at the logo. Go quiet and the CPU tank shoots it instead. The logo rebuilds itself a pixel at a time.
+- The beige monitor runs the real game in attract mode (`play.html?demo`: three CPU tanks on HARD, muted). It only loads while it is on screen. With reduced motion turned on, a still frame (`img/demo.png`) is shown instead.
+- The setup dialog, the invite-code box, and the blast-radius chart all link into the game. Keycaps on the page press down when you press the real key.
+- Sound is off until the **SND** button in the menu bar turns it on.
+
+Links that work on `play.html`:
+
+| URL | Opens |
+| --- | --- |
+| `play.html?mode=cpu` / `hotseat` / `online` | the title screen with that mode picked |
+| `play.html?host` | a new online room straight away |
+| `play.html?room=K7Q4M` | the join screen, already dialling that room |
+| `play.html?demo` | attract mode, CPU vs CPU |
+
+A `?room=` link that lands on `index.html` is forwarded to the game.
 
 ## Modes (title screen)
 
@@ -20,15 +40,51 @@ A match is a **best of 5**: first tank to **3 hill wins** takes the series (or t
 
 | Setting | Options |
 | --- | --- |
-| **MODE** | **1P vs CPU** — you against 1–3 AI tanks · **HOTSEAT** — 2–4 humans, same keyboard |
+| **MODE** | **1P vs CPU** — you against 1–3 AI tanks · **HOTSEAT** — 2–4 humans, same keyboard · **ONLINE** — 2–4 players on their own screens |
 | **DIFFICULTY** | (vs CPU) Easy / Normal / Hard — a lone AI is named *Rookie*, *Lobber*, or *Windmaster* |
 | **CPU TANKS** | (vs CPU) 1, 2, or 3. With more than one it is a free-for-all: *Viper*, *Hammer*, and *Brutus* shoot whoever is closest, including each other |
 | **PLAYERS** | (hotseat) 2, 3, or 4 |
+| **ROOM** | (online) **HOST** opens a room and shows an invite code · **JOIN** asks for a friend's code |
 | **SOUND** | On / Off |
 
 **← →** change the highlighted value · **↑ ↓** move between rows · **Enter** or **click** to start.
 
 Hotseat opens on `P1 — LOOK AWAY` before the hill is shown, then blanks again before every later human turn. Press **Enter** when the keyboard has been passed.
+
+## Online play
+
+1. One player picks **ONLINE → HOST**. The room screen shows a five-letter **invite code** (no I, O, 0 or 1, so it is easy to read out).
+2. Friends either open the **invite link** (`…/play.html?room=K7Q4M`, copied with **C** or the **COPY LINK** button; phones get the share sheet) or pick **ONLINE → JOIN** and type the code. Pasting the code or the whole link works too.
+3. The host can fill empty seats with **CPU TANKS** (and pick their difficulty), then presses **Enter** / **START**. Up to four tanks in total.
+
+How it plays:
+
+- Each player aims on their own screen. Everyone else watches the barrel swing live and sees the same shell, crater, and wind.
+- Your tank wears a **YOU** tag. The top-right corner shows `YOUR SHOT 0:45` or `P2 AIMING 0:31`.
+- Every turn has a **45-second shot clock**. When it runs out your current aim fires. If a player goes silent, the host fires their last aim shortly after.
+- Between hills everyone shops at the same time. The next hill starts when all players press **DONE**.
+- If a guest leaves, a bot takes over their tank (`P2-BOT`) and the series carries on. If the host leaves, the series ends for everyone. **Esc** leaves the room.
+- A room cannot be joined once the series has started.
+
+How it works: the browsers connect peer-to-peer over WebRTC using [PeerJS](https://peerjs.com/), which is loaded from a CDN only when you pick ONLINE. The free PeerJS cloud broker introduces the players; after that, game data goes directly between browsers (or through PeerJS's public relay when a strict NAT blocks a direct link). The host owns every random roll (maps, wind, crates, CPU aim) and sends a snapshot at the start of each turn. Shots travel as angle, power, and weapon. Every screen flies them itself on the same fixed 1/120 s step, so all screens see the same result, and the next snapshot corrects any rounding drift.
+
+To run your own broker instead of the public one (for example if it is down, or you are on a LAN):
+
+```bash
+npx peer --port 9000
+```
+
+Then open the game with `?broker=your.host:9000` (use `https://…` for a TLS broker). Invite links carry the setting along.
+
+## Sharing a result
+
+When a series ends, the game builds a result card: a 1200×675 PNG of the final blow of the last hill, with who took the series, the score, and every tank's hills, kills, damage, and shots. A dialog opens a moment later:
+
+- **SHARE…** hands the picture itself to any app (Instagram, WhatsApp, Messages, X…). It appears on phones and on browsers that can share files.
+- **SAVE IMAGE** and **COPY IMAGE** for desktops.
+- **POST TO X / FACEBOOK / WHATSAPP / REDDIT** opens a ready-made post with the text and a link to the front page. Those links can't attach the picture, so save or copy it first.
+
+The card and text are told from each screen's player ("I won a Tank Wars series 3-1 against WINDMASTER…", "P2 beat me 3-0…"); online, everyone gets their own. **Esc** closes it; **S** or the **SHARE RESULT** button on the result panel brings it back.
 
 ## Battle controls
 
@@ -88,9 +144,16 @@ All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, U
 ## Project layout
 
 ```
-index.html      page chrome
-styles.css      monitor bezel, pixel scaling
-js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD)
+index.html      front page
+landing.css     front page styles (VGA palette, soil layers, text-mode windows)
+js/landing.js   front page toys (shootable logo, attract monitor, join box, blast chart)
+play.html       the game page
+styles.css      game page: monitor bezel, pixel scaling
+js/net.js       online transport (PeerJS loader, invite codes, peer links)
+js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
+favicon.svg     pixel tank icon
+img/demo.png    a real frame from the game, used when motion is reduced
+fonts/          VT323 (SIL Open Font License, see VT323-OFL.txt)
 ```
 
 Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it needs special flight, a new `kind` in `stepShots`. Shop entries live in the `SHOP` array.
