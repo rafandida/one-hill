@@ -2733,8 +2733,10 @@
       ctx.globalAlpha = 0.45;
       ctx.fillStyle = this.wind < 0 ? C.lcyan : C.lmag;
       for (let i = 0; i < 4; i++) {
-        const travel = (this.time * 70 * dir + i * 160) % (W + 80);
-        const x = dir < 0 ? W - travel : travel - 40;
+        // Positive modulo: a negative dividend would push west-wind streaks off-screen for good.
+        const wrap = W + 80;
+        const travel = (((this.time * 70 + i * 160) % wrap) + wrap) % wrap;
+        const x = dir < 0 ? W + 40 - travel : travel - 40;
         ctx.fillRect(x, PLAY_TOP + 30 + i * 36, span, 1);
       }
       ctx.globalAlpha = 1;
