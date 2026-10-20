@@ -134,6 +134,14 @@
 
   const CRATE_KINDS = ["bomb", "bomb", "mirv", "digger", "dirt", "nuke"];
 
+  // Online play (transport lives in js/net.js).
+  const NET_VERSION = 1;
+  const MAX_TANKS = 4;
+  const SHOT_CLOCK = 45;
+  const CLOCK_GRACE = 12;
+  const SYNC_PATIENCE = 4;
+  const MENU_MODES = { title: true, lobby: true, join: true, netdown: true };
+
   // ---------------------------------------------------------------------------
   // Utilities
   // ---------------------------------------------------------------------------
@@ -437,6 +445,8 @@
 
   function onKeyDown(e) {
     Sfx.ensure();
+    // Leave browser shortcuts (copy, paste, reload) alone. AltGr reads as Ctrl+Alt.
+    if (e.metaKey || (e.ctrlKey && !e.altKey)) return;
     const k = e.key;
     if (
       k === "ArrowUp" ||
@@ -1072,6 +1082,17 @@
     this.weaponBoxes = [];
     this.handoffLock = 0;
     this.handoffKind = "";
+    this.net = null;
+    this.onlineRole = "host";
+    this.netCpu = 0;
+    this.lobbyRow = 0;
+    this.lobbyBoxes = [];
+    this.joinCode = "";
+    this.joinError = "";
+    this.turnSeq = 0;
+    this.clock = 0;
+    this.waitT = 0;
+    this.shopReady = false;
 
     this.rebuildStars();
   }
@@ -1103,7 +1124,10 @@
   };
 
   Game.prototype.applyModeCounts = function () {
-    if (this.playMode === "cpu") {
+    if (this.net) {
+      this.humanCount = this.net.seats.length;
+      this.tankCount = Math.min(MAX_TANKS, this.humanCount + this.netCpu);
+    } else if (this.playMode === "cpu") {
       this.tankCount = 1 + this.cpuCount;
       this.humanCount = 1;
     } else {
@@ -1113,6 +1137,7 @@
   };
 
   Game.prototype.startSeries = function () {
+    if (this.net) this.hostSeatSeries();
     this.applyModeCounts();
     const n = this.tankCount;
     const humans = this.humanCount;
@@ -1163,8 +1188,18 @@
     }
     const kind = MAPS[this.mapIndex % MAPS.length];
     this.mapIndex++;
-    this.mapKind = kind;
     const map = generateMap(kind, Math.random);
+    let wind = irand(-9, 9);
+    if (Math.abs(wind) < 2) wind = irand(0, 1) ? 2 : -2;
+    const xs = [];
+    for (let i = 0; i < this.roster.length; i++) xs.push(slotX(i, this.roster.length, kind));
+    this.layBattle(kind, map, wind, xs);
+    if (this.net) this.netSend({ t: "battle", s: this.battleSnapshot() });
+  };
+
+  /** Fresh hill from rolled (or received) map, wind, and tank slots. */
+  Game.prototype.layBattle = function (kind, map, wind, xs) {
+    this.mapKind = kind;
     this.height = map.height;
     this.water = map.water;
     this.rebuildStars();
@@ -1179,13 +1214,13 @@
     this.turnNumber = 0;
     this.roundScored = false;
     this.roundLines = [];
-    this.wind = irand(-9, 9);
-    if (Math.abs(this.wind) < 2) this.wind = irand(0, 1) ? 2 : -2;
+    this.wind = wind;
+    this.windShift = false;
 
     this.tanks = [];
     for (let i = 0; i < this.roster.length; i++) {
       const src = this.roster[i];
-      const x = slotX(i, this.roster.length, kind);
+      const x = xs[i];
       this.tanks.push({
         id: src.id,
         name: src.name,
@@ -1220,7 +1255,7 @@
     this.ai = null;
     this.banner = MAP_LABEL[kind];
     this.bannerT = 0.8;
-    if (this.humanCount > 1) {
+    if (this.humanCount > 1 && !this.net) {
       this.mode = "handoff";
       this.handoffKind = "open";
       this.handoffLock = 0.45;
@@ -1293,6 +1328,15 @@
   }
 
   Game.prototype.playVictoryJingle = function () {
+    if (this.net) {
+      const seat = this.net.seat;
+      const mine = this.tanks.filter(function (t) {
+        return t.id === seat;
+      })[0];
+      if (mine && mine.alive) Sfx.win();
+      else Sfx.lose();
+      return;
+    }
     const humansAlive = this.tanks.some(function (t) {
       return t.alive && t.human;
     });
@@ -1338,6 +1382,12 @@
     this.seriesOver = lead.best >= WINS_TO_TAKE || (this.round >= 5 && lead.count === 1) || this.round >= 7;
     this.mode = "victory";
     this.playVictoryJingle();
+    if (this.net) this.hostVictory();
+  };
+
+  Game.prototype.leaveVictory = function () {
+    if (!this.seriesOver) this.beginShop();
+    else if (!this.isGuest()) this.startSeries();
   };
 
   Game.prototype.beginShop = function () {
@@ -1346,6 +1396,12 @@
     this.shopNote = "";
     this.shopCpu = 0;
     this.mode = "shop";
+    if (this.net) {
+      // Everyone shops at once, each on their own screen.
+      this.shopPlayer = this.net.seat;
+      this.shopReady = false;
+      return;
+    }
     this.openShopPlayer();
   };
 
@@ -1368,13 +1424,22 @@
   };
 
   Game.prototype.advanceShop = function () {
+    if (this.net) {
+      if (this.shopReady) return;
+      this.shopReady = true;
+      this.shopNote = "";
+      Sfx.ui();
+      if (this.net.host) this.hostShopCheck();
+      else this.netSend({ t: "shopdone" });
+      return;
+    }
     this.shopPlayer++;
     this.openShopPlayer();
   };
 
   Game.prototype.tryShopBuy = function () {
     const r = this.roster[this.shopPlayer];
-    if (!r || !r.human) return;
+    if (!r || !r.human || (this.net && this.shopReady)) return;
     if (this.shopCursor >= SHOP.length) {
       this.advanceShop();
       return;
@@ -1383,6 +1448,7 @@
     if (applyBuy(r, item)) {
       this.shopNote = "BOUGHT " + item.name;
       Sfx.pickup();
+      if (this.isGuest()) this.netSend({ t: "buy", id: item.id });
     } else {
       this.shopNote = "NEED $" + item.cost;
       Sfx.deny();
@@ -1419,8 +1485,8 @@
     cur.power = clamp(cur.power, 10, maxPowerFor(cur));
     this.ai = null;
     this.turnNumber++;
-    this.banner = cur.name + (windShift ? "  WIND SHIFT" : "  READY?");
-    this.bannerT = windShift ? 0.9 : 0.55;
+    this.turnSeq++;
+    this.announceTurn();
     if (!cur.human) {
       const plan = aiChoose(this, cur);
       this.ai = {
@@ -1431,7 +1497,7 @@
       };
       cur.weapon = plan.weapon;
       this.mode = "aim";
-    } else if (this.humanCount > 1 && !(opts && opts.skipHandoff)) {
+    } else if (this.humanCount > 1 && !this.net && !(opts && opts.skipHandoff)) {
       this.mode = "handoff";
       this.handoffKind = "turn";
       this.handoffLock = 0.4;
@@ -1440,6 +1506,25 @@
       this.mode = "aim";
       Sfx.ui();
     }
+    if (this.net) this.hostTurn();
+  };
+
+  Game.prototype.announceTurn = function () {
+    const cur = this.current();
+    const mine = this.net && this.isLocal(cur);
+    const who = mine ? "YOUR TURN" : cur.name;
+    this.banner = who + (this.windShift ? "  WIND SHIFT" : mine ? "" : "  READY?");
+    this.bannerT = this.windShift || mine ? 0.9 : 0.55;
+  };
+
+  /** Tanks this screen's player steers. Offline that's every human tank. */
+  Game.prototype.isLocal = function (tank) {
+    if (!tank || !tank.human) return false;
+    return !this.net || tank.id === this.net.seat;
+  };
+
+  Game.prototype.isGuest = function () {
+    return !!(this.net && !this.net.host);
   };
 
   Game.prototype.releaseHandoff = function () {
@@ -1458,17 +1543,32 @@
     Sfx.ui();
   };
 
-  Game.prototype.tryFire = function () {
+  /** Fire the current tank. `remote` replays a shot another screen already took. */
+  Game.prototype.tryFire = function (remote) {
     const tank = this.current();
     if (!tank || !tank.alive || this.mode !== "aim") return;
-    if (tank.human && tank.guidance > 0 && this.previewOn) tank.guidance--;
-    const w = WEAPONS[tank.weapon];
-    if (w.ammo !== Infinity) {
-      if (tank.ammo[tank.weapon] <= 0) {
-        tank.weapon = 0;
-      } else {
-        tank.ammo[tank.weapon]--;
+    if (!remote && this.isGuest() && !this.isLocal(tank)) return;
+    let guide;
+    if (remote) {
+      tank.angle = remote.a;
+      tank.power = remote.p;
+      tank.weapon = remote.w;
+      guide = remote.g && tank.guidance > 0;
+      if (WEAPONS[tank.weapon].ammo !== Infinity) tank.ammo[tank.weapon] = Math.max(0, tank.ammo[tank.weapon] - 1);
+    } else {
+      guide = this.isLocal(tank) && tank.guidance > 0 && this.previewOn;
+      const w = WEAPONS[tank.weapon];
+      if (w.ammo !== Infinity) {
+        if (tank.ammo[tank.weapon] <= 0) {
+          tank.weapon = 0;
+        } else {
+          tank.ammo[tank.weapon]--;
+        }
       }
+    }
+    if (guide) tank.guidance--;
+    if (this.net && !remote) {
+      this.netSend({ t: "fire", seq: this.turnSeq, id: tank.id, a: tank.angle, p: tank.power, w: tank.weapon, g: guide });
     }
     const m = muzzle(tank);
     spawnShot(this, tank, WEAPONS[tank.weapon], m.x, m.y, tank.angle, tank.power);
@@ -1550,7 +1650,7 @@
 
   Game.prototype.handleAimInput = function (dt) {
     const tank = this.current();
-    if (!tank || !tank.human) return;
+    if (!this.isLocal(tank)) return;
 
     const prevA = Math.round(tank.angle);
     const prevP = Math.round(tank.power);
@@ -1599,10 +1699,14 @@
 
   Game.prototype.nudgeTitle = function (dir) {
     if (this.titleRow === 0) {
-      this.playMode = this.playMode === "cpu" ? "hotseat" : "cpu";
+      const modes = window.TankNet ? ["cpu", "hotseat", "online"] : ["cpu", "hotseat"];
+      const i = modes.indexOf(this.playMode);
+      this.playMode = modes[(i + dir + modes.length) % modes.length];
     } else if (this.titleRow === 1) {
       if (this.playMode === "cpu") {
         this.difficulty = (this.difficulty + dir + 3) % 3;
+      } else if (this.playMode === "online") {
+        this.onlineRole = this.onlineRole === "host" ? "join" : "host";
       } else {
         this.hotseatPlayers += dir;
         if (this.hotseatPlayers < 2) this.hotseatPlayers = 4;
@@ -1631,7 +1735,7 @@
     }
     if (consume("Enter") || consume(" ") || consume("Spacebar")) {
       Sfx.ui();
-      this.startSeries();
+      this.startFromTitle();
     }
     if (consume("m") || consume("M")) {
       Sfx.muted = !Sfx.muted;
@@ -1639,9 +1743,28 @@
     }
   };
 
+  Game.prototype.startFromTitle = function () {
+    if (this.playMode !== "online") {
+      this.startSeries();
+    } else if (this.onlineRole === "host") {
+      this.hostOnline();
+    } else {
+      this.mode = "join";
+      this.joinError = "";
+      flushTaps();
+    }
+  };
+
+  Game.prototype.toTitle = function () {
+    if (this.net) this.leaveOnline();
+    this.roster = null;
+    this.mode = "title";
+    flushTaps();
+  };
+
   Game.prototype.handleShopInput = function () {
     const r = this.roster[this.shopPlayer];
-    if (!r || !r.human || this.shopCpu > 0) return;
+    if (!r || !r.human || this.shopCpu > 0 || (this.net && this.shopReady)) return;
     const rows = SHOP.length + 1;
     if (consume("ArrowUp") || consume("w") || consume("W")) {
       this.shopCursor = (this.shopCursor + rows - 1) % rows;
@@ -1671,8 +1794,22 @@
     stepParticles(this, dt);
     stepCallouts(this, dt);
 
+    if (this.net) this.netTick(dt);
+
     if (this.mode === "title") {
       this.handleTitleInput();
+      return;
+    }
+
+    if (this.mode === "join") {
+      this.handleJoinInput();
+      return;
+    }
+
+    if (this.mode === "netdown") {
+      if (consume("Enter") || consume(" ") || consume("Spacebar") || consume("Escape") || consume("Esc")) {
+        this.toTitle();
+      }
       return;
     }
 
@@ -1682,9 +1819,12 @@
     }
 
     if (consume("Escape") || consume("Esc")) {
-      this.roster = null;
-      this.mode = "title";
-      flushTaps();
+      this.toTitle();
+      return;
+    }
+
+    if (this.mode === "lobby") {
+      this.handleLobbyInput();
       return;
     }
 
@@ -1709,10 +1849,7 @@
     }
 
     if (this.mode === "victory") {
-      if (consume("Enter") || consume(" ") || consume("Spacebar")) {
-        if (this.seriesOver) this.startSeries();
-        else this.beginShop();
-      }
+      if (consume("Enter") || consume(" ") || consume("Spacebar")) this.leaveVictory();
       return;
     }
 
@@ -1744,6 +1881,9 @@
             this.dropWait = 0.05;
           }
         }
+      } else if (this.isGuest()) {
+        this.mode = "netwait";
+        this.waitT = 0;
       } else {
         this.turn = -1;
         this.nextTurn({ skipHandoff: this.humanCount > 1 });
@@ -1753,11 +1893,20 @@
 
     stepCrates(this, dt);
 
+    if (this.mode === "netwait") {
+      this.waitT += dt;
+      this.settleTanks(dt);
+      return;
+    }
+
     if (this.mode === "aim") {
       this.settleTanks(dt);
+      if (this.net && this.netClock(dt)) return;
+      const guest = this.isGuest();
       if (this.ai) {
         const tank = this.current();
-        if (consume(" ") || consume("Spacebar") || consume("Enter")) {
+        if (guest) flushTaps();
+        else if (consume(" ") || consume("Spacebar") || consume("Enter")) {
           if (tank) {
             tank.angle = this.ai.angle;
             tank.power = this.ai.power;
@@ -1774,11 +1923,15 @@
           if (Math.abs(tank.angle - this.ai.angle) < 0.8 && Math.abs(tank.power - this.ai.power) < 0.8) {
             tank.angle = this.ai.angle;
             tank.power = this.ai.power;
-            this.tryFire();
+            // A guest's CPU only mimes; the host's shot arrives over the wire.
+            if (!guest) this.tryFire();
           }
         }
-      } else {
+      } else if (this.isLocal(this.current())) {
         this.handleAimInput(dt);
+        if (this.net && this.mode === "aim") this.netAimOut();
+      } else if (this.net) {
+        this.followNetAim(dt);
       }
       return;
     }
@@ -1797,9 +1950,754 @@
       stepShots(this, dt);
       if (!busy && this.shots.length === 0 && this.explosions.length === 0) {
         const living = this.living();
-        if (living.length <= 1) this.enterVictory();
+        if (this.isGuest()) {
+          this.mode = "netwait";
+          this.waitT = 0;
+        } else if (living.length <= 1) this.enterVictory();
         else this.nextTurn();
       }
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Online play — host-authoritative. The host rolls everything random (maps,
+  // wind, crates, CPU aim) and opens each turn with a snapshot. Shots travel as
+  // angle/power/weapon; every screen flies them itself on the same fixed step,
+  // and the next snapshot wipes out any drift.
+  // ---------------------------------------------------------------------------
+  const TANK_SYNC = [
+    "name",
+    "human",
+    "x",
+    "y",
+    "vy",
+    "falling",
+    "fallAcc",
+    "angle",
+    "power",
+    "hp",
+    "alive",
+    "weapon",
+    "shields",
+    "guidance",
+    "roundKills",
+  ];
+
+  function packAmmo(ammo) {
+    return ammo.map(function (n) {
+      return n === Infinity ? -1 : n;
+    });
+  }
+
+  function unpackAmmo(ammo) {
+    return ammo.map(function (n) {
+      return n < 0 ? Infinity : n;
+    });
+  }
+
+  /** Terrain travels in 1/16 px steps. The host snaps its own copy too, so every screen holds the same hill. */
+  function packHeight(height) {
+    const out = new Array(height.length);
+    for (let x = 0; x < height.length; x++) {
+      out[x] = Math.round(height[x] * 16);
+      height[x] = out[x] / 16;
+    }
+    return out;
+  }
+
+  function unpackHeight(height, packed) {
+    for (let x = 0; x < height.length; x++) height[x] = packed[x] / 16;
+  }
+
+  function packRoster(r) {
+    return {
+      id: r.id,
+      name: r.name,
+      human: r.human,
+      cash: r.cash,
+      wins: r.wins,
+      ammo: packAmmo(r.ammo),
+      shields: r.shields,
+      guidance: r.guidance,
+    };
+  }
+
+  function unpackRoster(s) {
+    return {
+      id: s.id,
+      name: s.name,
+      color: PLAYER_COLORS[s.id],
+      dim: PLAYER_DIM[s.id],
+      human: s.human,
+      cash: s.cash,
+      wins: s.wins,
+      ammo: unpackAmmo(s.ammo),
+      shields: s.shields,
+      guidance: s.guidance,
+    };
+  }
+
+  function packTank(t) {
+    const s = { id: t.id, ammo: packAmmo(t.ammo) };
+    for (let i = 0; i < TANK_SYNC.length; i++) s[TANK_SYNC[i]] = t[TANK_SYNC[i]];
+    return s;
+  }
+
+  function seatName(i, humans, cpu, difficulty) {
+    if (i < humans) return "P" + (i + 1);
+    return cpu === 1 ? DIFF_NAMES[difficulty] : CPU_CALLSIGNS[i - humans];
+  }
+
+  Game.prototype.hostOnline = function () {
+    const self = this;
+    const net = {
+      host: true,
+      seat: 0,
+      code: "",
+      room: null,
+      seats: [{ link: null, gone: false }],
+      inbox: [],
+      error: "",
+      note: "",
+      noteT: 0,
+      shopDone: {},
+      waiting: [],
+      aimKey: "",
+      aimAt: 0,
+      playing: false,
+    };
+    this.net = net;
+    this.mode = "lobby";
+    this.lobbyRow = 0;
+    this.netCpu = Math.min(this.netCpu, MAX_TANKS - 1);
+    TankNet.host({
+      join: function () {},
+      message: function (link, m) {
+        self.netPost(net, link, m);
+      },
+      leave: function (link) {
+        self.netPost(net, link, { t: "_leave" });
+      },
+    }).then(
+      function (room) {
+        if (self.net !== net) {
+          room.close();
+          return;
+        }
+        net.room = room;
+        net.code = room.code;
+        Sfx.pickup();
+      },
+      function (err) {
+        if (self.net === net) net.error = err.message;
+      }
+    );
+  };
+
+  Game.prototype.joinOnline = function (code) {
+    const self = this;
+    const net = {
+      host: false,
+      seat: -1,
+      code: code,
+      link: null,
+      humans: 0,
+      cpu: 0,
+      inbox: [],
+      note: "",
+      noteT: 0,
+      waiting: [],
+      aimKey: "",
+      aimAt: 0,
+      playing: false,
+    };
+    this.net = net;
+    this.joinError = "";
+    this.mode = "join";
+    TankNet.join(code, {
+      message: function (link, m) {
+        self.netPost(net, link, m);
+      },
+      leave: function (link) {
+        self.netPost(net, link, { t: "_leave" });
+      },
+    }).then(
+      function (link) {
+        if (self.net !== net) {
+          link.close();
+          return;
+        }
+        net.link = link;
+        link.send({ t: "hello", v: NET_VERSION });
+      },
+      function (err) {
+        if (self.net !== net) return;
+        self.net = null;
+        self.joinError = err.message;
+        Sfx.deny();
+      }
+    );
+  };
+
+  Game.prototype.leaveOnline = function () {
+    const net = this.net;
+    this.net = null;
+    if (/[?&]room=/.test(location.search)) {
+      const q = new URLSearchParams(location.search);
+      q.delete("room");
+      const rest = q.toString();
+      history.replaceState(null, "", location.pathname + (rest ? "?" + rest : ""));
+    }
+    if (!net) return;
+    if (net.room) net.room.close();
+    if (net.link) net.link.close();
+  };
+
+  Game.prototype.netDown = function (why) {
+    this.leaveOnline();
+    this.roster = null;
+    this.netDownWhy = why;
+    this.mode = "netdown";
+    Sfx.lose();
+  };
+
+  Game.prototype.lobbyNote = function (text) {
+    this.net.note = text;
+    this.net.noteT = 2.6;
+  };
+
+  /** Queue a message; the game loop applies it in order. */
+  Game.prototype.netPost = function (net, link, m) {
+    if (this.net !== net || !m || typeof m.t !== "string") return;
+    net.inbox.push({ link: link, m: m, wait: 0 });
+    if (this.onNetActivity) this.onNetActivity();
+  };
+
+  /** Host: tell every guest (but `except`). Guest: tell the host. */
+  Game.prototype.netSend = function (m, except) {
+    const net = this.net;
+    if (!net) return;
+    if (net.host) {
+      if (net.room) net.room.broadcast(m, except);
+    } else if (net.link) net.link.send(m);
+  };
+
+  Game.prototype.netTick = function (dt) {
+    const net = this.net;
+    if (net.noteT > 0) net.noteT -= dt;
+    while (this.net === net && net.inbox.length) {
+      const item = net.inbox[0];
+      const done = net.host ? this.hostHandle(item.link, item.m) : this.guestHandle(item.m, item.wait);
+      if (!done) {
+        // Head-of-line: later messages belong to the turn this one opens.
+        item.wait += dt;
+        break;
+      }
+      net.inbox.shift();
+    }
+  };
+
+  Game.prototype.hostHandle = function (link, m) {
+    const net = this.net;
+    let seat = -1;
+    for (let i = 1; i < net.seats.length; i++) {
+      if (net.seats[i].link === link && !net.seats[i].gone) seat = i;
+    }
+    if (m.t === "hello") {
+      if (seat < 0) this.hostAdmit(link, m);
+      return true;
+    }
+    if (seat < 0) return true;
+    if (m.t === "_leave") this.hostLost(seat);
+    else if (m.t === "aim") this.netAimIn(m, seat, link);
+    else if (m.t === "fire") this.hostFireIn(m, seat, link);
+    else if (m.t === "buy") {
+      const item = SHOP.filter(function (s) {
+        return s.id === m.id;
+      })[0];
+      const r = this.roster && this.roster[seat];
+      if (item && r && r.human && (this.mode === "victory" || this.mode === "shop")) applyBuy(r, item);
+    } else if (m.t === "shopdone") {
+      net.shopDone[seat] = true;
+      this.hostShopCheck();
+    }
+    return true;
+  };
+
+  Game.prototype.hostAdmit = function (link, m) {
+    const net = this.net;
+    let why = "";
+    if (m.v !== NET_VERSION) why = "DIFFERENT GAME VERSION · RELOAD";
+    else if (net.playing) why = "THAT GAME ALREADY STARTED";
+    else if (net.seats.length >= MAX_TANKS) why = "THAT ROOM IS FULL";
+    if (why) {
+      link.send({ t: "reject", why: why });
+      setTimeout(link.close, 400);
+      return;
+    }
+    net.seats.push({ link: link, gone: false });
+    this.netCpu = Math.min(this.netCpu, MAX_TANKS - net.seats.length);
+    this.lobbyNote("P" + net.seats.length + " JOINED");
+    Sfx.pickup();
+    this.sendLobby();
+  };
+
+  Game.prototype.sendLobby = function () {
+    const net = this.net;
+    for (let i = 1; i < net.seats.length; i++) {
+      const s = net.seats[i];
+      if (s.gone) continue;
+      s.link.send({
+        t: "lobby",
+        you: i,
+        humans: net.seats.length,
+        cpu: this.netCpu,
+        diff: this.difficulty,
+        code: net.code,
+      });
+    }
+  };
+
+  /** Seat whoever is still here; seat index doubles as roster id. */
+  Game.prototype.hostSeatSeries = function () {
+    const net = this.net;
+    net.seats = net.seats.filter(function (s) {
+      return !s.gone;
+    });
+    if (net.seats.length + this.netCpu < 2) this.netCpu = 1;
+    this.netCpu = Math.min(this.netCpu, MAX_TANKS - net.seats.length);
+    net.playing = true;
+    net.shopDone = {};
+    net.waiting = [];
+    this.sendLobby();
+  };
+
+  Game.prototype.hostLost = function (seat) {
+    const net = this.net;
+    const label = "P" + (seat + 1);
+    Sfx.deny();
+    if (!net.playing) {
+      net.seats.splice(seat, 1);
+      this.lobbyNote(label + " LEFT");
+      this.sendLobby();
+      return;
+    }
+    net.seats[seat].gone = true;
+    const r = this.roster && this.roster[seat];
+    if (!r || !r.human) return;
+    r.human = false;
+    r.name = label + "-BOT";
+    const t = this.tanks.filter(function (tk) {
+      return tk.id === seat;
+    })[0];
+    if (t) {
+      t.human = false;
+      t.name = r.name;
+      t.netAim = null;
+    }
+    this.banner = label + " LEFT · BOT DRIVES";
+    this.bannerT = 1.6;
+    this.netSend({ t: "left", id: seat, name: r.name });
+    if (t && t.alive && this.mode === "aim" && this.current() === t && !this.ai) {
+      const plan = aiChoose(this, t);
+      this.ai = { angle: plan.angle, power: plan.power, weapon: plan.weapon, think: 0.4 };
+      t.weapon = plan.weapon;
+    }
+    if (this.mode === "victory" || this.mode === "shop") {
+      cpuPurchase(r, this.difficulty);
+      net.shopDone[seat] = true;
+      this.hostShopCheck();
+    }
+  };
+
+  /** Next hill starts once every player still here has pressed DONE. */
+  Game.prototype.hostShopCheck = function () {
+    const net = this.net;
+    const waiting = [];
+    for (let i = 0; i < net.seats.length; i++) {
+      const done = i === 0 ? this.mode === "shop" && this.shopReady : net.seats[i].gone || net.shopDone[i];
+      if (!done) waiting.push("P" + (i + 1));
+    }
+    net.waiting = waiting;
+    if (waiting.length) {
+      this.netSend({ t: "wait", names: waiting });
+      return;
+    }
+    this.round++;
+    this.newBattle();
+  };
+
+  Game.prototype.hostVictory = function () {
+    this.net.shopDone = {};
+    this.shopReady = false;
+    for (let i = 0; i < this.roster.length; i++) {
+      if (!this.roster[i].human) cpuPurchase(this.roster[i], this.difficulty);
+    }
+    const s = this.fieldSnapshot();
+    s.roster = this.roster.map(packRoster);
+    s.winner = this.winner ? this.winner.id : -1;
+    s.lines = this.roundLines;
+    s.seriesOver = this.seriesOver;
+    s.round = this.round;
+    this.netSend({ t: "victory", s: s });
+  };
+
+  Game.prototype.hostTurn = function () {
+    this.clock = SHOT_CLOCK;
+    for (let i = 0; i < this.tanks.length; i++) this.tanks[i].netAim = null;
+    flushTaps();
+    const ai = this.ai ? { angle: this.ai.angle, power: this.ai.power, weapon: this.ai.weapon } : null;
+    this.netSend({ t: "turn", seq: this.turnSeq, s: this.fieldSnapshot(), ai: ai });
+  };
+
+  Game.prototype.hostFireIn = function (m, seat, link) {
+    const t = this.current();
+    if (this.mode !== "aim" || m.seq !== this.turnSeq || !t || t.id !== seat || !t.human) return;
+    const shot = {
+      t: "fire",
+      seq: m.seq,
+      id: seat,
+      a: clamp(+m.a || 0, 0, 180),
+      p: clamp(+m.p || 0, 10, maxPowerFor(t)),
+      w: clamp(m.w | 0, 0, WEAPONS.length - 1),
+      g: !!m.g,
+    };
+    this.tryFire(shot);
+    this.netSend(shot, link);
+  };
+
+  Game.prototype.battleSnapshot = function () {
+    return {
+      roster: this.roster.map(packRoster),
+      round: this.round,
+      mapIndex: this.mapIndex,
+      mapKind: this.mapKind,
+      difficulty: this.difficulty,
+      height: packHeight(this.height),
+      water: this.water,
+      wind: this.wind,
+      xs: this.tanks.map(function (t) {
+        return t.x;
+      }),
+    };
+  };
+
+  Game.prototype.fieldSnapshot = function () {
+    return {
+      height: packHeight(this.height),
+      tanks: this.tanks.map(packTank),
+      crates: this.crates.map(function (c) {
+        return { x: c.x, y: c.y, vy: c.vy, kind: c.kind, grounded: c.grounded };
+      }),
+      wind: this.wind,
+      windShift: !!this.windShift,
+      turn: this.turn,
+    };
+  };
+
+  Game.prototype.guestHandle = function (m, wait) {
+    const net = this.net;
+    if (m.t === "_leave") {
+      if (this.mode === "join") {
+        this.leaveOnline();
+        this.joinError = "COULD NOT JOIN";
+      } else this.netDown(net.playing ? "HOST LEFT THE GAME" : "HOST CLOSED THE ROOM");
+    } else if (m.t === "reject") {
+      this.leaveOnline();
+      this.mode = "join";
+      this.joinError = String(m.why || "COULD NOT JOIN");
+      Sfx.deny();
+    } else if (m.t === "lobby") {
+      net.seat = m.you;
+      net.humans = m.humans;
+      net.cpu = m.cpu;
+      net.code = m.code;
+      this.difficulty = m.diff;
+      if (this.mode === "join") {
+        this.mode = "lobby";
+        Sfx.pickup();
+      }
+    } else if (m.t === "battle") {
+      this.applyBattle(m.s);
+    } else if (m.t === "turn" || m.t === "victory") {
+      // Let this screen finish flying the last shot before jumping ahead.
+      if (this.mode !== "netwait" && wait < SYNC_PATIENCE) return false;
+      if (m.t === "turn") this.applyTurn(m);
+      else this.applyVictory(m.s);
+    } else if (m.t === "fire") {
+      const t = this.current();
+      if (this.mode === "aim" && m.seq === this.turnSeq && t && t.id === m.id) this.tryFire(m);
+    } else if (m.t === "aim") {
+      this.netAimIn(m, -1, null);
+    } else if (m.t === "left") {
+      this.guestLost(m);
+    } else if (m.t === "wait") {
+      net.waiting = m.names || [];
+    }
+    return true;
+  };
+
+  Game.prototype.guestLost = function (m) {
+    const r = this.roster && this.roster[m.id];
+    if (r) {
+      r.human = false;
+      r.name = m.name;
+    }
+    const t = this.tanks.filter(function (tk) {
+      return tk.id === m.id;
+    })[0];
+    if (t) {
+      t.human = false;
+      t.name = m.name;
+      t.netAim = null;
+    }
+    this.banner = "P" + (m.id + 1) + " LEFT · BOT DRIVES";
+    this.bannerT = 1.6;
+    Sfx.deny();
+  };
+
+  Game.prototype.applyBattle = function (s) {
+    this.roster = s.roster.map(unpackRoster);
+    this.round = s.round;
+    this.mapIndex = s.mapIndex;
+    this.difficulty = s.difficulty;
+    this.seriesOver = false;
+    this.tankCount = this.roster.length;
+    this.humanCount = this.roster.filter(function (r) {
+      return r.human;
+    }).length;
+    this.net.playing = true;
+    this.net.waiting = [];
+    this.shopReady = false;
+    const height = new Float32Array(W);
+    unpackHeight(height, s.height);
+    this.layBattle(s.mapKind, { height: height, water: s.water }, s.wind, s.xs);
+  };
+
+  Game.prototype.syncField = function (s) {
+    this.shots = [];
+    unpackHeight(this.height, s.height);
+    for (let i = 0; i < s.tanks.length; i++) {
+      const src = s.tanks[i];
+      const t = this.tanks[i];
+      if (!t || t.id !== src.id) continue;
+      if (t.alive && !src.alive) t.death = 0;
+      for (let k = 0; k < TANK_SYNC.length; k++) t[TANK_SYNC[k]] = src[TANK_SYNC[k]];
+      t.ammo = unpackAmmo(src.ammo);
+      t.dropped = true;
+      t.netAim = null;
+    }
+    this.crates = s.crates.map(function (c) {
+      return { x: c.x, y: c.y, vy: c.vy, kind: c.kind, grounded: c.grounded, blink: 0 };
+    });
+    this.wind = s.wind;
+    this.windShift = s.windShift;
+    this.turn = s.turn;
+  };
+
+  Game.prototype.applyTurn = function (m) {
+    this.syncField(m.s);
+    this.turnSeq = m.seq;
+    this.clock = SHOT_CLOCK;
+    const cur = this.current();
+    this.ai = m.ai ? { angle: m.ai.angle, power: m.ai.power, weapon: m.ai.weapon, think: 0.05 } : null;
+    if (this.ai) cur.weapon = this.ai.weapon;
+    if (Math.abs(this.wind) >= 4) Sfx.whoosh(this.wind);
+    this.announceTurn();
+    this.mode = "aim";
+    if (cur.human) Sfx.ui();
+    flushTaps();
+  };
+
+  Game.prototype.applyVictory = function (s) {
+    this.syncField(s);
+    this.roster = s.roster.map(unpackRoster);
+    this.winner = null;
+    for (let i = 0; i < this.tanks.length; i++) {
+      if (this.tanks[i].id === s.winner) this.winner = this.tanks[i];
+    }
+    this.roundLines = s.lines || [];
+    this.seriesOver = s.seriesOver;
+    this.round = s.round;
+    this.roundScored = true;
+    this.shopReady = false;
+    this.net.waiting = [];
+    this.mode = "victory";
+    this.playVictoryJingle();
+  };
+
+  /** Mirror the shooter's barrel while they aim on their own screen. */
+  Game.prototype.netAimIn = function (m, seat, link) {
+    const t = this.current();
+    if (this.mode !== "aim" || m.seq !== this.turnSeq || !t || !t.human || t.id !== m.id || this.isLocal(t)) return;
+    if (this.net.host && t.id !== seat) return;
+    t.netAim = { a: +m.a, p: +m.p };
+    if (WEAPONS[m.w | 0]) t.weapon = m.w | 0;
+    if (this.net.host) this.netSend(m, link);
+  };
+
+  Game.prototype.netAimOut = function () {
+    const net = this.net;
+    const t = this.current();
+    const key = Math.round(t.angle * 2) + ":" + Math.round(t.power * 2) + ":" + t.weapon;
+    if (key === net.aimKey || this.time - net.aimAt < 0.07) return;
+    net.aimKey = key;
+    net.aimAt = this.time;
+    this.netSend({ t: "aim", seq: this.turnSeq, id: t.id, a: t.angle, p: t.power, w: t.weapon });
+  };
+
+  Game.prototype.followNetAim = function (dt) {
+    flushTaps();
+    const t = this.current();
+    if (!t || !t.netAim) return;
+    const k = Math.min(1, dt * 12);
+    t.angle += (t.netAim.a - t.angle) * k;
+    t.power += (t.netAim.p - t.power) * k;
+  };
+
+  /** Online turns run on a shot clock so nobody can stall the hill. */
+  Game.prototype.netClock = function (dt) {
+    const t = this.current();
+    if (!t || !t.human || this.ai) return false;
+    const before = this.clock;
+    this.clock -= dt;
+    if (this.isLocal(t)) {
+      if (this.clock < 10 && Math.ceil(this.clock) !== Math.ceil(before)) Sfx.beep(520, 0.05, "square", 0.03);
+      if (this.clock > 0) return false;
+      this.banner = "TIME!";
+      this.bannerT = 0.8;
+      this.tryFire();
+      return true;
+    }
+    // Host backstop for a player who went quiet: fire their last aim.
+    if (this.net.host && this.clock <= -CLOCK_GRACE) {
+      if (t.netAim) {
+        t.angle = t.netAim.a;
+        t.power = t.netAim.p;
+      }
+      this.banner = t.name + " TIMED OUT";
+      this.bannerT = 0.9;
+      this.tryFire();
+      return true;
+    }
+    return false;
+  };
+
+  Game.prototype.handleLobbyInput = function () {
+    if (!this.net.host) {
+      flushTaps();
+      return;
+    }
+    if (consume("c") || consume("C")) this.shareInvite();
+    if (consume("ArrowUp") || consume("w") || consume("W") || consume("ArrowDown") || consume("s") || consume("S")) {
+      this.lobbyRow = 1 - this.lobbyRow;
+      Sfx.ui();
+    }
+    if (consume("ArrowLeft") || consume("a") || consume("A")) this.nudgeLobby(-1);
+    if (consume("ArrowRight") || consume("d") || consume("D")) this.nudgeLobby(1);
+    if (consume("Enter") || consume(" ") || consume("Spacebar")) this.hostStart();
+  };
+
+  Game.prototype.nudgeLobby = function (dir) {
+    if (this.lobbyRow === 0) {
+      const open = MAX_TANKS - this.net.seats.length;
+      this.netCpu = (this.netCpu + dir + open + 1) % (open + 1);
+    } else {
+      this.difficulty = (this.difficulty + dir + 3) % 3;
+    }
+    Sfx.ui();
+    this.sendLobby();
+  };
+
+  Game.prototype.hostStart = function () {
+    const net = this.net;
+    if (!net.room) return;
+    if (net.seats.length + this.netCpu < 2) {
+      this.lobbyNote("INVITE A FRIEND OR ADD A CPU");
+      Sfx.deny();
+      return;
+    }
+    Sfx.ui();
+    this.startSeries();
+  };
+
+  /** Phones get the share sheet; everyone else gets the link on the clipboard. */
+  Game.prototype.shareInvite = function () {
+    const net = this.net;
+    if (!net || !net.code) return;
+    const self = this;
+    const url = TankNet.inviteLink(net.code);
+    function note(text) {
+      if (self.net === net) self.lobbyNote(text);
+    }
+    Sfx.ui();
+    if (url && navigator.share && window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
+      navigator.share({ title: "Tank Wars", text: "Join my Tank Wars hill: " + net.code, url: url }).catch(function () {});
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url || net.code).then(
+        function () {
+          note(url ? "INVITE LINK COPIED" : "CODE COPIED");
+        },
+        function () {
+          note("COPY BLOCKED · READ OUT THE CODE");
+        }
+      );
+    } else {
+      note("COPY BLOCKED · READ OUT THE CODE");
+    }
+  };
+
+  Game.prototype.lobbyClick = function (p) {
+    for (let i = 0; i < this.lobbyBoxes.length; i++) {
+      const b = this.lobbyBoxes[i];
+      if (p.x < b.x || p.x > b.x + b.w || p.y < b.y || p.y > b.y + b.h) continue;
+      if (b.id === "share") this.shareInvite();
+      else if (b.id === "start") this.hostStart();
+      else if (b.id === "leave") this.toTitle();
+      else {
+        this.lobbyRow = b.id === "cpu" ? 0 : 1;
+        this.nudgeLobby(1);
+      }
+      return;
+    }
+  };
+
+  Game.prototype.handleJoinInput = function () {
+    if (consume("Escape") || consume("Esc")) {
+      this.toTitle();
+      return;
+    }
+    if (this.net) {
+      flushTaps();
+      return;
+    }
+    while (taps.length) {
+      const k = taps.shift();
+      if (k === "Backspace" || k === "Delete") {
+        this.joinCode = this.joinCode.slice(0, -1);
+      } else if (k === "Enter") {
+        this.tryJoin();
+        break;
+      } else if (k.length === 1) {
+        const c = TankNet.cleanCode(k);
+        if (c && this.joinCode.length < TankNet.CODE_LEN) {
+          this.joinCode += c;
+          this.joinError = "";
+          Sfx.tick();
+        }
+      }
+    }
+  };
+
+  Game.prototype.tryJoin = function () {
+    if (this.joinCode.length === TankNet.CODE_LEN) {
+      Sfx.ui();
+      this.joinOnline(this.joinCode);
+    } else {
+      this.joinError = "THE CODE IS " + TankNet.CODE_LEN + " CHARACTERS";
+      Sfx.deny();
     }
   };
 
@@ -1926,6 +2824,15 @@
       const t = this.tanks[i];
       if (this.mode === "drop" && !t.dropped && t.y < PLAY_TOP) continue;
       drawTankSprite(ctx, t);
+      if (this.net && t.alive && t.id === this.net.seat) {
+        const myTurn = this.mode === "aim" && this.current() === t;
+        if (myTurn && Math.floor(this.time * 4) % 2) continue;
+        ctx.font = 'bold 9px "Courier New", Courier, monospace';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = t.color;
+        ctx.fillText("YOU", Math.round(t.x), Math.round(t.y) - 24);
+      }
     }
   };
 
@@ -2002,7 +2909,7 @@
     const tank = this.current();
     const y = HUD / 2;
 
-    if (!tank || this.mode === "title") {
+    if (!tank || MENU_MODES[this.mode]) {
       ctx.fillStyle = C.yellow;
       ctx.textAlign = "left";
       ctx.fillText("TANK WARS", 8, y);
@@ -2103,7 +3010,7 @@
   Game.prototype.drawAimGuide = function (ctx) {
     if (this.mode !== "aim") return;
     const tank = this.current();
-    if (!tank || !tank.human) return;
+    if (!this.isLocal(tank)) return;
     const rad = (tank.angle * Math.PI) / 180;
     const m = muzzle(tank);
     ctx.strokeStyle = tank.color;
@@ -2143,14 +3050,18 @@
     ctx.fillText(this.banner, W / 2, PLAY_TOP + 30);
   };
 
-  Game.prototype.drawTitle = function (ctx) {
+  Game.prototype.drawMenuPanel = function (ctx) {
+    if (!this.height) this.height = generateHeightmap(W, Math.random);
     this.drawSky(ctx);
-    if (this.height) this.drawTerrain(ctx);
-
+    this.drawTerrain(ctx);
     ctx.fillStyle = "rgba(0,0,0,0.66)";
     ctx.fillRect(70, 44, 500, 312);
     ctx.strokeStyle = C.yellow;
     ctx.strokeRect(74, 48, 492, 304);
+  };
+
+  Game.prototype.drawTitle = function (ctx) {
+    this.drawMenuPanel(ctx);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -2164,13 +3075,19 @@
     ctx.font = '11px "Courier New", Courier, monospace';
     ctx.fillText("Inspired by Kenny Morse, 1990  ·  original graphics", W / 2, 124);
 
-    const modeVal = this.playMode === "cpu" ? "1P vs CPU" : "HOTSEAT";
-    const row1 =
-      this.playMode === "cpu"
-        ? { label: "DIFFICULTY", value: DIFF_LABELS[this.difficulty], hint: DIFF_NAMES[this.difficulty] }
-        : { label: "PLAYERS", value: String(this.hotseatPlayers), hint: "same keyboard" };
-    const modeHint =
-      this.playMode !== "cpu" ? "2–4 humans" : this.cpuCount === 1 ? "you vs AI" : "free-for-all";
+    const modeVal = { cpu: "1P vs CPU", hotseat: "HOTSEAT", online: "ONLINE" }[this.playMode];
+    let row1;
+    if (this.playMode === "cpu") {
+      row1 = { label: "DIFFICULTY", value: DIFF_LABELS[this.difficulty], hint: DIFF_NAMES[this.difficulty] };
+    } else if (this.playMode === "online") {
+      const hosting = this.onlineRole === "host";
+      row1 = { label: "ROOM", value: hosting ? "HOST" : "JOIN", hint: hosting ? "get a code" : "use their code" };
+    } else {
+      row1 = { label: "PLAYERS", value: String(this.hotseatPlayers), hint: "same keyboard" };
+    }
+    let modeHint = "2–4 humans";
+    if (this.playMode === "online") modeHint = "invite friends";
+    else if (this.playMode === "cpu") modeHint = this.cpuCount === 1 ? "you vs AI" : "free-for-all";
     const rows = [{ label: "MODE", value: modeVal, hint: modeHint }, row1];
     if (this.playMode === "cpu") {
       rows.push({
@@ -2246,7 +3163,11 @@
     ctx.fillStyle = C.white;
     ctx.fillText(score, W / 2, top + tall - 48);
     ctx.font = '13px "Courier New", Courier, monospace';
-    ctx.fillText(this.seriesOver ? "ENTER  rematch     ESC  title" : "ENTER  shop     ESC  title", W / 2, top + tall - 26);
+    let keysLine = this.seriesOver ? "ENTER  rematch     ESC  title" : "ENTER  shop     ESC  title";
+    if (this.net && !this.seriesOver) keysLine = "ENTER  shop     ESC  leave";
+    else if (this.net && this.net.host) keysLine = "ENTER  rematch     ESC  close room";
+    else if (this.net) keysLine = "HOST CALLS THE REMATCH     ESC  leave";
+    ctx.fillText(keysLine, W / 2, top + tall - 26);
   };
 
   Game.prototype.drawHandoff = function (ctx) {
@@ -2297,20 +3218,26 @@
       lx += ctx.measureText(labels[i]).width + 12;
     }
     const buyer = this.roster[this.shopPlayer];
+    const ready = !!(this.net && this.shopReady);
     ctx.fillStyle = buyer ? buyer.color : C.white;
     ctx.font = 'bold 16px "Courier New", Courier, monospace';
-    ctx.fillText(buyer ? buyer.name + " BUYING" : "", 56, 108);
-    if (this.shopNote) {
-      ctx.fillStyle = C.lgreen;
+    ctx.fillText(buyer ? buyer.name + (ready ? " READY" : " BUYING") : "", 56, 108);
+    let note = this.shopNote;
+    if (ready) {
+      const waiting = this.net.waiting;
+      note = waiting.length ? "WAITING FOR " + waiting.join(" ") : "WAITING FOR THE OTHERS";
+    }
+    if (note) {
+      ctx.fillStyle = ready ? C.yellow : C.lgreen;
       ctx.font = '12px "Courier New", Courier, monospace';
-      ctx.fillText(this.shopNote, 250, 112);
+      ctx.fillText(note, 250, 112);
     }
     ctx.font = '14px "Courier New", Courier, monospace';
     this.shopBoxes = [];
     for (let i = 0; i < SHOP.length; i++) {
       const item = SHOP[i];
       const y = 140 + i * 26;
-      const sel = this.shopCursor === i && buyer && buyer.human && this.shopCpu <= 0;
+      const sel = this.shopCursor === i && buyer && buyer.human && this.shopCpu <= 0 && !ready;
       ctx.fillStyle = sel ? C.yellow : C.gray;
       const have = stockLabel(buyer, item.id);
       ctx.fillText((sel ? "> " : "  ") + item.name, 64, y);
@@ -2321,13 +3248,216 @@
       this.shopBoxes.push({ i: i, y: y, h: 24 });
     }
     const doneY = 140 + SHOP.length * 26 + 6;
-    const doneSel = this.shopCursor >= SHOP.length && buyer && buyer.human && this.shopCpu <= 0;
+    const doneSel = this.shopCursor >= SHOP.length && buyer && buyer.human && this.shopCpu <= 0 && !ready;
     ctx.fillStyle = doneSel ? C.yellow : C.white;
-    ctx.fillText((doneSel ? "> " : "  ") + "DONE  —  next tank", 64, doneY);
+    ctx.fillText((doneSel ? "> " : "  ") + (this.net ? "DONE  —  ready" : "DONE  —  next tank"), 64, doneY);
     this.shopBoxes.push({ i: SHOP.length, y: doneY, h: 24 });
     ctx.fillStyle = C.dgray;
     ctx.font = '11px "Courier New", Courier, monospace';
-    ctx.fillText("↑↓ pick    ENTER buy    N done    ESC quits the series", 56, 336);
+    const quit = this.net ? "ESC leaves the game" : "ESC quits the series";
+    ctx.fillText("↑↓ pick    ENTER buy    N done    " + quit, 56, 336);
+  };
+
+  Game.prototype.drawLobby = function (ctx) {
+    const net = this.net;
+    this.drawMenuPanel(ctx);
+    this.lobbyBoxes = [];
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = C.yellow;
+    ctx.font = 'bold 22px "Courier New", Courier, monospace';
+    ctx.fillText(net.host ? "ONLINE ROOM" : "JOINED ROOM", W / 2, 58);
+
+    if (net.error) {
+      ctx.fillStyle = C.lred;
+      ctx.font = 'bold 16px "Courier New", Courier, monospace';
+      ctx.fillText(net.error, W / 2, 150);
+      ctx.fillStyle = C.gray;
+      ctx.font = '12px "Courier New", Courier, monospace';
+      ctx.fillText("Online play needs the internet. Local modes still work.", W / 2, 184);
+      ctx.fillStyle = C.white;
+      ctx.fillText("ESC  back", W / 2, 300);
+      return;
+    }
+    if (!net.code) {
+      ctx.fillStyle = Math.floor(this.time * 3) % 2 ? C.yellow : C.white;
+      ctx.font = 'bold 16px "Courier New", Courier, monospace';
+      ctx.fillText("OPENING ROOM…", W / 2, 150);
+      ctx.fillStyle = C.white;
+      ctx.font = '12px "Courier New", Courier, monospace';
+      ctx.fillText("ESC  back", W / 2, 300);
+      return;
+    }
+
+    ctx.fillStyle = C.gray;
+    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.fillText("INVITE CODE", W / 2, 86);
+    ctx.fillStyle = C.lcyan;
+    ctx.font = 'bold 40px "Courier New", Courier, monospace';
+    for (let i = 0; i < net.code.length; i++) {
+      ctx.fillText(net.code[i], W / 2 + (i - (net.code.length - 1) / 2) * 34, 100);
+    }
+    const url = TankNet.inviteLink(net.code);
+    ctx.font = '11px "Courier New", Courier, monospace';
+    if (net.noteT > 0) {
+      ctx.fillStyle = C.lgreen;
+      ctx.fillText(net.note, W / 2, 148);
+    } else if (net.host) {
+      ctx.fillStyle = C.dgray;
+      ctx.fillText(url ? (url.length > 64 ? "…" + url.slice(-63) : url) : "read this code to a friend", W / 2, 148);
+    }
+
+    const humans = net.host ? net.seats.length : net.humans;
+    const cpu = net.host ? this.netCpu : net.cpu;
+    ctx.textAlign = "left";
+    ctx.font = '13px "Courier New", Courier, monospace';
+    for (let i = 0; i < MAX_TANKS; i++) {
+      const y = 170 + i * 17;
+      const filled = i < humans + cpu;
+      ctx.fillStyle = filled ? PLAYER_COLORS[i] : C.dgray;
+      ctx.fillText(filled ? seatName(i, humans, cpu, this.difficulty) : "--", 170, y);
+      let status = "open seat";
+      if (i === 0) status = "host";
+      else if (i < humans) status = "ready";
+      else if (filled) status = "cpu · " + DIFF_LABELS[this.difficulty].toLowerCase();
+      if (i === net.seat) status += "  (you)";
+      ctx.fillStyle = filled ? C.white : C.dgray;
+      ctx.fillText(status, 290, y);
+    }
+
+    if (net.host) {
+      const rows = [
+        { id: "cpu", label: "CPU TANKS", value: String(this.netCpu) },
+        { id: "diff", label: "DIFFICULTY", value: DIFF_LABELS[this.difficulty] },
+      ];
+      ctx.font = '13px "Courier New", Courier, monospace';
+      for (let i = 0; i < rows.length; i++) {
+        const y = 246 + i * 18;
+        const sel = this.lobbyRow === i;
+        ctx.fillStyle = sel ? C.yellow : C.gray;
+        ctx.fillText((sel ? "> " : "  ") + rows[i].label, 170, y);
+        ctx.fillStyle = sel ? C.white : C.lcyan;
+        ctx.fillText("< " + rows[i].value + " >", 330, y);
+        this.lobbyBoxes.push({ id: rows[i].id, x: 160, y: y - 2, w: 320, h: 17 });
+      }
+      this.drawLobbyButton(ctx, "share", url ? "COPY LINK" : "COPY CODE", 196, C.lcyan);
+      const canStart = humans + cpu >= 2;
+      this.drawLobbyButton(ctx, "start", "START", 330, canStart ? C.lgreen : C.dgray);
+      ctx.textAlign = "center";
+      ctx.fillStyle = C.gray;
+      ctx.font = '11px "Courier New", Courier, monospace';
+      ctx.fillText("↑ ↓ ← → set CPU    C copy link    ENTER start    ESC close", W / 2, 330);
+    } else {
+      ctx.textAlign = "center";
+      ctx.fillStyle = Math.floor(this.time * 2) % 2 ? C.yellow : C.white;
+      ctx.font = 'bold 13px "Courier New", Courier, monospace';
+      ctx.fillText("WAITING FOR THE HOST TO START", W / 2, 254);
+      this.drawLobbyButton(ctx, "leave", "LEAVE", 263, C.lred);
+      ctx.fillStyle = C.gray;
+      ctx.font = '11px "Courier New", Courier, monospace';
+      ctx.fillText("ESC  leave", W / 2, 330);
+    }
+  };
+
+  Game.prototype.drawLobbyButton = function (ctx, id, label, x, color) {
+    const y = 290;
+    const w = 114;
+    const h = 22;
+    ctx.fillStyle = "#3a3a3a";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = color;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px "Courier New", Courier, monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    this.lobbyBoxes.push({ id: id, x: x, y: y, w: w, h: h });
+  };
+
+  Game.prototype.drawJoin = function (ctx) {
+    this.drawMenuPanel(ctx);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = C.yellow;
+    ctx.font = 'bold 22px "Courier New", Courier, monospace';
+    ctx.fillText("JOIN A GAME", W / 2, 58);
+    ctx.fillStyle = C.white;
+    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.fillText("TYPE THE INVITE CODE", W / 2, 96);
+
+    const n = TankNet.CODE_LEN;
+    const bw = 44;
+    const gap = 10;
+    const x0 = W / 2 - (n * bw + (n - 1) * gap) / 2;
+    ctx.font = 'bold 32px "Courier New", Courier, monospace';
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < n; i++) {
+      const x = x0 + i * (bw + gap);
+      const ch = this.joinCode[i] || "";
+      const cursor = !this.net && i === this.joinCode.length && Math.floor(this.time * 3) % 2 === 0;
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(x, 124, bw, 48);
+      ctx.strokeStyle = cursor ? C.yellow : ch ? C.lcyan : C.dgray;
+      ctx.strokeRect(x + 0.5, 124.5, bw - 1, 47);
+      ctx.fillStyle = C.lcyan;
+      ctx.fillText(ch, x + bw / 2, 150);
+    }
+
+    ctx.textBaseline = "top";
+    ctx.font = 'bold 13px "Courier New", Courier, monospace';
+    if (this.net) {
+      ctx.fillStyle = Math.floor(this.time * 3) % 2 ? C.yellow : C.white;
+      ctx.fillText(this.net.link ? "JOINING ROOM…" : "CONNECTING…", W / 2, 192);
+    } else if (this.joinError) {
+      ctx.fillStyle = C.lred;
+      ctx.fillText(this.joinError, W / 2, 192);
+    }
+    ctx.fillStyle = C.gray;
+    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.fillText("Paste works too, code or whole invite link.", W / 2, 226);
+    ctx.fillText("A friend's link drops you straight in.", W / 2, 242);
+    ctx.fillStyle = C.white;
+    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.fillText("ENTER  join     BACKSPACE  fix     ESC  back", W / 2, 300);
+  };
+
+  Game.prototype.drawNetDown = function (ctx) {
+    this.drawMenuPanel(ctx);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = C.lred;
+    ctx.font = 'bold 22px "Courier New", Courier, monospace';
+    ctx.fillText(this.netDownWhy || "CONNECTION LOST", W / 2, 160);
+    ctx.fillStyle = C.gray;
+    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.fillText("The series ends here.", W / 2, 196);
+    ctx.fillStyle = C.white;
+    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.fillText("ENTER  back to title", W / 2, 260);
+  };
+
+  /** Shot clock and sync state, top-right of the field. */
+  Game.prototype.drawNetStatus = function (ctx) {
+    let text = "";
+    let color = C.gray;
+    const cur = this.current();
+    if (this.mode === "aim" && cur && cur.human && !this.ai) {
+      const secs = Math.max(0, Math.ceil(this.clock));
+      const mine = this.isLocal(cur);
+      text = (mine ? "YOUR SHOT " : cur.name + " AIMING ") + "0:" + (secs < 10 ? "0" : "") + secs;
+      color = secs <= 10 && Math.floor(this.time * 4) % 2 ? C.lred : cur.color;
+    } else if (this.mode === "netwait" && this.waitT > 1.5) {
+      text = "WAITING FOR HOST…";
+    }
+    if (!text) return;
+    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = color;
+    ctx.fillText(text, W - 6, PLAY_TOP + 9);
   };
 
   function stockLabel(roster, id) {
@@ -2357,9 +3487,11 @@
     ctx.setLineDash([]);
     ctx.clearRect(0, 0, W, H);
 
-    if (this.mode === "title") {
-      if (!this.height) this.height = generateHeightmap(W, Math.random);
-      this.drawTitle(ctx);
+    if (MENU_MODES[this.mode]) {
+      if (this.mode === "title") this.drawTitle(ctx);
+      else if (this.mode === "lobby") this.drawLobby(ctx);
+      else if (this.mode === "join") this.drawJoin(ctx);
+      else this.drawNetDown(ctx);
       this.drawHud(ctx);
       return;
     }
@@ -2394,6 +3526,7 @@
 
     this.drawHud(ctx);
     this.drawWeaponBar(ctx);
+    if (this.net) this.drawNetStatus(ctx);
     this.drawBanner(ctx);
     if (this.mode === "victory") this.drawVictory(ctx);
   };
@@ -2435,7 +3568,7 @@
     }
     if (this.mode === "aim") {
       const tank = this.current();
-      if (tank && tank.human && p.y < H - FOOT && p.y > HUD) {
+      if (this.isLocal(tank) && p.y < H - FOOT && p.y > HUD) {
         this.pointer.aim = true;
         this.pointer.power = tank.power;
       }
@@ -2451,7 +3584,7 @@
     this.pointer.y = p.y;
     if (!this.pointer.aim || this.mode !== "aim") return;
     const tank = this.current();
-    if (!tank || !tank.human) return;
+    if (!this.isLocal(tank)) return;
     const prevA = Math.round(tank.angle);
     const prevP = Math.round(tank.power);
     const pivotY = tank.y - 8;
@@ -2468,21 +3601,29 @@
     this.pointer.down = false;
     this.pointer.aim = false;
     if (this.mode === "title") {
-      this.startSeries();
+      this.startFromTitle();
       return;
     }
+    if (this.mode === "lobby") {
+      this.lobbyClick(p);
+      return;
+    }
+    if (this.mode === "netdown") {
+      this.toTitle();
+      return;
+    }
+    if (this.mode === "join") return;
     if (this.mode === "handoff") {
       this.releaseHandoff();
       return;
     }
     if (this.mode === "victory") {
-      if (this.seriesOver) this.startSeries();
-      else this.beginShop();
+      this.leaveVictory();
       return;
     }
     if (this.mode === "shop") {
       const buyer = this.roster[this.shopPlayer];
-      if (!buyer || !buyer.human || this.shopCpu > 0) return;
+      if (!buyer || !buyer.human || this.shopCpu > 0 || (this.net && this.shopReady)) return;
       const boxes = this.shopBoxes || [];
       for (let i = 0; i < boxes.length; i++) {
         const b = boxes[i];
@@ -2494,7 +3635,7 @@
       }
       return;
     }
-    if (this.mode === "aim" && this.ai && !dragged) {
+    if (this.mode === "aim" && this.ai && !dragged && !this.isGuest()) {
       const cpu = this.current();
       if (cpu) {
         cpu.angle = this.ai.angle;
@@ -2511,7 +3652,7 @@
           const b = boxes[i];
           if (p.x >= b.x && p.x <= b.x + b.w) {
             const tank = this.current();
-            if (!tank || !tank.human) return;
+            if (!this.isLocal(tank)) return;
             const w = WEAPONS[b.i];
             if (w.ammo === Infinity || tank.ammo[b.i] > 0) {
               tank.weapon = b.i;
@@ -2550,14 +3691,53 @@
   canvas.tabIndex = 0;
   canvas.focus();
 
+  window.addEventListener("paste", function (e) {
+    if (game.mode !== "join" || game.net) return;
+    const text = (e.clipboardData && e.clipboardData.getData("text")) || "";
+    const room = /room=([A-Za-z0-9]+)/.exec(text);
+    game.joinCode = TankNet.cleanCode(room ? room[1] : text);
+    game.joinError = "";
+    e.preventDefault();
+  });
+
+  // Fixed step: every screen in an online game flies a shell through the same
+  // sequence of positions, whatever its refresh rate.
+  const STEP = 1 / 120;
   let last = performance.now();
-  function frame(now) {
-    let dt = (now - last) / 1000;
+  let acc = 0;
+  let ticking = false;
+  function advance(now, cap) {
+    if (ticking) return;
+    ticking = true;
+    acc += clamp((now - last) / 1000, 0, cap);
     last = now;
-    if (dt > 0.05) dt = 0.05;
-    game.tick(dt);
+    while (acc >= STEP) {
+      game.tick(STEP);
+      acc -= STEP;
+    }
+    ticking = false;
+  }
+  function frame(now) {
+    advance(now, 0.05);
     game.draw();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+
+  // Hidden tabs get no animation frames. Keep an online match moving anyway,
+  // e.g. while the host is off pasting the invite link into a chat.
+  function backgroundPump() {
+    if (document.hidden && game.net) advance(performance.now(), 1);
+  }
+  setInterval(backgroundPump, 250);
+  game.onNetActivity = backgroundPump;
+
+  const invite = window.TankNet && new URLSearchParams(location.search).get("room");
+  if (invite) {
+    game.playMode = "online";
+    game.onlineRole = "join";
+    game.joinCode = TankNet.cleanCode(invite);
+    game.mode = "join";
+    if (game.joinCode.length === TankNet.CODE_LEN) game.joinOnline(game.joinCode);
+  }
 })();
