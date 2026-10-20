@@ -97,3 +97,132 @@ body.demo #hint {
 #hint a:focus-visible {
   color: #55ffff;
 }
+
+/* Share dialog at the end of a series: a text-mode window like the front page */
+.share {
+  width: min(760px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 34px 28px 24px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 15px;
+  line-height: 1.35;
+  color: #aaaaaa;
+  background: #0000aa;
+  border: 0;
+  box-shadow: 14px 14px 0 rgba(0, 0, 0, 0.7);
+}
+
+.share::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.share::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 6px double #ffffff;
+  pointer-events: none;
+}
+
+.share-title {
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  margin: 0;
+  padding: 0 10px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  color: #ffffff;
+  background: #0000aa;
+  transform: translateX(-50%);
+}
+
+.share-title:focus {
+  outline: none;
+}
+
+.share-card {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin: 4px 0 14px;
+  background: #000000;
+  border: 2px solid #000000;
+}
+
+.share-text {
+  margin: 0 0 18px;
+  color: #ffffff;
+}
+
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+}
+
+.share button {
+  padding: 7px 14px 6px;
+  font: inherit;
+  font-weight: bold;
+  color: #000000;
+  background: #55ffff;
+  border: 0;
+  box-shadow: 6px 6px 0 #000000;
+  cursor: pointer;
+}
+
+.share button[data-act="native"] {
+  background: #55ff55;
+}
+
+.share button:hover {
+  background: #ffff55;
+}
+
+.share button:active {
+  transform: translate(6px, 6px);
+  box-shadow: none;
+}
+
+.share button:focus-visible,
+.share a:focus-visible {
+  outline: 3px solid #ffff55;
+  outline-offset: 3px;
+}
+
+.share-links {
+  margin: 20px 0 4px;
+  color: #ffffff;
+}
+
+.share-links a {
+  margin-left: 10px;
+  color: #55ffff;
+}
+
+.share-links a:hover {
+  color: #ffff55;
+}
+
+.share-tip {
+  margin: 4px 0 0;
+}
+
+.share-note {
+  min-height: 1.35em;
+  margin: 8px 0 12px;
+  color: #55ff55;
+}
+
+.share-foot {
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.share-foot button {
+  background: #aaaaaa;
+}

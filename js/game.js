@@ -445,6 +445,7 @@
 
   function onKeyDown(e) {
     Sfx.ensure();
+    if (Share.isOpen()) return;
     // Leave browser shortcuts (copy, paste, reload) alone. AltGr reads as Ctrl+Alt.
     if (e.metaKey || (e.ctrlKey && !e.altKey)) return;
     const k = e.key;
@@ -698,7 +699,9 @@
       Sfx.hit();
       return "block";
     }
-    tank.hp = Math.max(0, tank.hp - dmg);
+    const dealt = Math.min(dmg, tank.hp);
+    tank.hp -= dealt;
+    if (owner && owner !== tank) owner.roundDmg = (owner.roundDmg || 0) + dealt;
     tank.flash = 0.2;
     callout(game, tank.x, tank.y - 28, direct ? "DIRECT HIT" : "-" + dmg, direct ? C.yellow : C.lred);
     burst(game, tank.x, tank.y - 6, 8, {
@@ -750,6 +753,7 @@
     if (!inWater(game.water, tank.x, tank.y)) excavate(game.height, tank.x, tank.y, 16);
     Sfx.death();
     game.pendingCrate = true;
+    if (game.living().length <= 1) game.captureIn = 0.14;
   }
 
   function grantLoot(tank, kind) {
@@ -1095,6 +1099,12 @@
     this.shopReady = false;
     this.demo = false;
     this.demoT = 0;
+    this.captureIn = 0;
+    this.captureNext = false;
+    this.finalFrame = null;
+    this.finalFrameRound = 0;
+    this.shareT = 0;
+    this.shareBox = null;
 
     this.rebuildStars();
   }
@@ -1166,11 +1176,15 @@
         }),
         shields: 0,
         guidance: 1,
+        shots: 0,
+        kills: 0,
+        dmg: 0,
       });
     }
     this.round = 1;
     this.mapIndex = 0;
     this.seriesOver = false;
+    this.shareT = 0;
     this.newBattle();
   };
 
@@ -1248,6 +1262,7 @@
         shields: src.shields,
         guidance: src.guidance,
         roundKills: 0,
+        roundDmg: 0,
         flash: 0,
         death: 0,
         bits: null,
@@ -1369,6 +1384,8 @@
       });
       r.shields = t.shields;
       r.guidance = t.guidance;
+      r.kills = (r.kills || 0) + (t.roundKills || 0);
+      r.dmg = (r.dmg || 0) + (t.roundDmg || 0);
       let pay = (t.roundKills || 0) * 400;
       const bits = [];
       if (t.roundKills) bits.push("+" + t.roundKills * 400 + " kills");
@@ -1388,6 +1405,7 @@
     this.mode = "victory";
     this.playVictoryJingle();
     if (this.net) this.hostVictory();
+    if (this.seriesOver) this.queueShare();
   };
 
   Game.prototype.leaveVictory = function () {
@@ -1572,6 +1590,8 @@
       }
     }
     if (guide) tank.guidance--;
+    const shooter = this.roster && this.roster[tank.id];
+    if (shooter) shooter.shots = (shooter.shots || 0) + 1;
     if (this.net && !remote) {
       this.netSend({ t: "fire", seq: this.turnSeq, id: tank.id, a: tank.angle, p: tank.power, w: tank.weapon, g: guide });
     }
@@ -1787,6 +1807,10 @@
   Game.prototype.tick = function (dt) {
     this.time += dt;
     if (this.bannerT > 0) this.bannerT -= dt;
+    if (this.captureIn > 0) {
+      this.captureIn -= dt;
+      if (this.captureIn <= 0) this.captureNext = true;
+    }
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 22);
 
     for (let i = 0; i < this.tanks.length; i++) {
@@ -1860,7 +1884,14 @@
           this.demoT = 0;
           this.leaveVictory();
         }
-      } else if (consume("Enter") || consume(" ") || consume("Spacebar")) this.leaveVictory();
+      } else {
+        if (this.shareT > 0) {
+          this.shareT -= dt;
+          if (this.shareT <= 0) Share.open(this);
+        }
+        if (this.seriesOver && (consume("s") || consume("S"))) Share.open(this);
+        else if (consume("Enter") || consume(" ") || consume("Spacebar")) this.leaveVictory();
+      }
       return;
     }
 
@@ -1992,6 +2023,7 @@
     "shields",
     "guidance",
     "roundKills",
+    "roundDmg",
   ];
 
   function packAmmo(ammo) {
@@ -2030,6 +2062,9 @@
       ammo: packAmmo(r.ammo),
       shields: r.shields,
       guidance: r.guidance,
+      shots: r.shots || 0,
+      kills: r.kills || 0,
+      dmg: r.dmg || 0,
     };
   }
 
@@ -2045,6 +2080,9 @@
       ammo: unpackAmmo(s.ammo),
       shields: s.shields,
       guidance: s.guidance,
+      shots: s.shots || 0,
+      kills: s.kills || 0,
+      dmg: s.dmg || 0,
     };
   }
 
@@ -2535,6 +2573,7 @@
     this.net.waiting = [];
     this.mode = "victory";
     this.playVictoryJingle();
+    if (this.seriesOver) this.queueShare();
   };
 
   /** Mirror the shooter's barrel while they aim on their own screen. */
@@ -3138,7 +3177,8 @@
   };
 
   Game.prototype.drawVictory = function (ctx) {
-    const tall = 168 + this.roundLines.length * 16;
+    const extra = this.seriesOver && !this.demo ? 34 : 0;
+    const tall = 168 + this.roundLines.length * 16 + extra;
     const top = Math.max(70, 200 - tall / 2);
     ctx.fillStyle = "rgba(0,0,0,0.62)";
     ctx.fillRect(90, top, 460, tall);
@@ -3174,12 +3214,24 @@
       score += this.roster[i].name + " " + this.roster[i].wins + "   ";
     }
     ctx.fillStyle = C.white;
-    ctx.fillText(score, W / 2, top + tall - 48);
+    ctx.fillText(score, W / 2, top + tall - 48 - extra);
+    this.shareBox = null;
+    if (extra) {
+      const box = { x: W / 2 - 74, y: top + tall - 74, w: 148, h: 24 };
+      ctx.fillStyle = C.lgreen;
+      ctx.fillRect(box.x, box.y, box.w, box.h);
+      ctx.fillStyle = C.black;
+      ctx.font = 'bold 13px "Courier New", Courier, monospace';
+      ctx.fillText("SHARE RESULT", W / 2, box.y + box.h / 2 + 1);
+      this.shareBox = box;
+    }
+    ctx.fillStyle = C.white;
     ctx.font = '13px "Courier New", Courier, monospace';
-    let keysLine = this.seriesOver ? "ENTER  rematch     ESC  title" : "ENTER  shop     ESC  title";
+    let keysLine = this.seriesOver ? "ENTER  rematch   S  share   ESC  title" : "ENTER  shop     ESC  title";
     if (this.net && !this.seriesOver) keysLine = "ENTER  shop     ESC  leave";
-    else if (this.net && this.net.host) keysLine = "ENTER  rematch     ESC  close room";
-    else if (this.net) keysLine = "HOST CALLS THE REMATCH     ESC  leave";
+    else if (this.net && this.net.host) keysLine = "ENTER  rematch   S  share   ESC  close";
+    else if (this.net) keysLine = "S  share   ESC  leave   HOST CALLS THE REMATCH";
+    if (this.demo) keysLine = "";
     ctx.fillText(keysLine, W / 2, top + tall - 26);
   };
 
@@ -3536,12 +3588,382 @@
     this.drawParticles(ctx);
     this.drawCallouts(ctx);
     ctx.restore();
+    // The share card's photo: playfield only, before the HUD and banners.
+    if (this.captureNext) {
+      this.captureNext = false;
+      this.grabFrame();
+    }
 
     this.drawHud(ctx);
     this.drawWeaponBar(ctx);
     if (this.net) this.drawNetStatus(ctx);
     this.drawBanner(ctx);
     if (this.mode === "victory") this.drawVictory(ctx);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Sharing — when a series ends: a 1200x675 card built from a photo of the
+  // last hill's final blow, and a dialog to send it somewhere.
+  // ---------------------------------------------------------------------------
+  const CARD_W = 1200;
+  const CARD_H = 675;
+  const CARD_FONT = '"Courier New", Courier, monospace';
+
+  /** The front page, which is what a stranger should land on. */
+  function siteUrl() {
+    if (location.protocol !== "http:" && location.protocol !== "https:") return "";
+    return location.origin + location.pathname.replace(/[^/]*$/, "");
+  }
+
+  function listNames(names) {
+    if (names.length < 2) return names.join("");
+    return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+
+  Game.prototype.grabFrame = function () {
+    if (this.demo) return;
+    if (!this.finalFrame) {
+      this.finalFrame = document.createElement("canvas");
+      this.finalFrame.width = W;
+      this.finalFrame.height = H;
+    }
+    this.finalFrame.getContext("2d").drawImage(this.canvas, 0, 0);
+    this.finalFrameRound = this.round;
+  };
+
+  Game.prototype.queueShare = function () {
+    if (this.demo) return;
+    // No final blow caught on this hill: use the aftermath instead.
+    if (this.finalFrameRound !== this.round) this.grabFrame();
+    this.shareT = 1.3;
+  };
+
+  /** Result, score, and the words to post, told from this screen's player. */
+  Game.prototype.shareInfo = function () {
+    const roster = this.roster;
+    const rows = roster.slice().sort(function (a, b) {
+      return b.wins - a.wins || (b.kills || 0) - (a.kills || 0) || a.id - b.id;
+    });
+    const champ = seriesChamp(roster);
+    let me = null;
+    if (this.net) me = roster[this.net.seat] || null;
+    else if (this.playMode === "cpu") me = roster[0];
+    const score = rows
+      .map(function (r) {
+        return r.wins;
+      })
+      .join("-");
+    let mode = "HOTSEAT · " + roster.length + " PLAYERS";
+    if (this.net) mode = "ONLINE · " + roster.length + " TANKS";
+    else if (this.playMode === "cpu") mode = "1P VS CPU · " + DIFF_LABELS[this.difficulty];
+    let headline = champ ? champ.name + " TAKES THE SERIES" : "SERIES DRAWN";
+    let text;
+    if (!champ) {
+      text = "A drawn series of Tank Wars, " + score + ". Nobody could read the wind.";
+    } else if (me && champ.id === me.id) {
+      headline = "YOU TAKE THE SERIES";
+      const foes = roster
+        .filter(function (r) {
+          return r.id !== me.id;
+        })
+        .map(function (r) {
+          return r.name;
+        });
+      const kills = me.kills || 0;
+      let tally = kills + (kills === 1 ? " kill" : " kills");
+      if (me.dmg) tally += ", " + me.dmg + " damage";
+      text =
+        "I won a Tank Wars series " + score + " against " + listNames(foes) + ": " + tally + ". Think you can read the wind?";
+    } else if (me) {
+      text = champ.name + " beat me " + score + " in Tank Wars. I want a rematch.";
+    } else {
+      text = champ.name + " won a " + roster.length + "-player hotseat series of Tank Wars, " + score + ".";
+    }
+    return {
+      rows: rows,
+      me: me,
+      score: score,
+      mode: mode,
+      headline: headline,
+      text: text,
+      alt: "Tank Wars result card: " + headline + ", " + score + ", " + mode + ", over the final shot of the series.",
+    };
+  };
+
+  function wrapLines(ctx, text, maxW) {
+    const words = text.split(" ");
+    const lines = [];
+    let line = "";
+    for (let i = 0; i < words.length; i++) {
+      const next = line ? line + " " + words[i] : words[i];
+      if (line && ctx.measureText(next).width > maxW) {
+        lines.push(line);
+        line = words[i];
+      } else line = next;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function renderShareCard(frame, info, url) {
+    const c = document.createElement("canvas");
+    c.width = CARD_W;
+    c.height = CARD_H;
+    const ctx = c.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = C.black;
+    ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+    // The battlefield (playfield only, no HUD) blown up with hard pixels.
+    const bar = 64;
+    if (frame) ctx.drawImage(frame, 0, PLAY_TOP, W, H - PLAY_TOP - FOOT, 0, bar, CARD_W, CARD_H - bar);
+    ctx.fillStyle = "rgba(0,0,0,0.16)";
+    for (let y = bar; y < CARD_H; y += 3) ctx.fillRect(0, y, CARD_W, 1);
+
+    ctx.fillStyle = C.blue;
+    ctx.fillRect(0, 0, CARD_W, bar);
+    ctx.fillStyle = C.white;
+    ctx.fillRect(0, bar - 8, CARD_W, 2);
+    ctx.fillRect(0, bar - 4, CARD_W, 2);
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.font = "bold 36px " + CARD_FONT;
+    ctx.fillStyle = C.yellow;
+    ctx.fillText("TANK WARS", 30, 28);
+    ctx.textAlign = "right";
+    ctx.font = "bold 22px " + CARD_FONT;
+    ctx.fillStyle = C.lcyan;
+    ctx.fillText(info.mode, CARD_W - 30, 29);
+
+    // Result window, text-mode style.
+    const x = 40;
+    const y = 104;
+    const w = 580;
+    ctx.font = "bold 42px " + CARD_FONT;
+    const head = wrapLines(ctx, info.headline, w - 72);
+    const h = 70 + head.length * 46 + 70 + 34 + info.rows.length * 34 + 22;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(x + 14, y + 14, w, h);
+    ctx.fillStyle = C.blue;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = C.white;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 11, y + 11, w - 22, h - 22);
+    ctx.strokeRect(x + 17, y + 17, w - 34, h - 34);
+    ctx.font = "bold 20px " + CARD_FONT;
+    ctx.textAlign = "center";
+    const title = " SERIES OVER ";
+    const tw = ctx.measureText(title).width;
+    ctx.fillStyle = C.blue;
+    ctx.fillRect(x + w / 2 - tw / 2, y + 4, tw, 22);
+    ctx.fillStyle = C.white;
+    ctx.fillText(title, x + w / 2, y + 15);
+
+    let cy = y + 62;
+    ctx.textAlign = "left";
+    ctx.font = "bold 42px " + CARD_FONT;
+    ctx.fillStyle = C.yellow;
+    for (let i = 0; i < head.length; i++) {
+      ctx.fillText(head[i], x + 36, cy);
+      cy += 46;
+    }
+    ctx.font = "bold 56px " + CARD_FONT;
+    ctx.fillStyle = C.white;
+    ctx.fillText(info.score, x + 36, cy + 12);
+    cy += 70;
+
+    const cols = [
+      { label: "HILLS", key: "wins", right: x + 300 },
+      { label: "KILLS", key: "kills", right: x + 380 },
+      { label: "DMG", key: "dmg", right: x + 456 },
+      { label: "SHOTS", key: "shots", right: x + 544 },
+    ];
+    ctx.font = "bold 18px " + CARD_FONT;
+    ctx.fillStyle = C.gray;
+    ctx.fillText("TANK", x + 36, cy);
+    ctx.textAlign = "right";
+    for (let i = 0; i < cols.length; i++) ctx.fillText(cols[i].label, cols[i].right, cy);
+    cy += 34;
+    ctx.font = "bold 24px " + CARD_FONT;
+    for (let i = 0; i < info.rows.length; i++) {
+      const r = info.rows[i];
+      const mine = info.me && r.id === info.me.id;
+      if (mine) {
+        ctx.fillStyle = C.cyan;
+        ctx.fillRect(x + 26, cy - 15, w - 52, 30);
+      }
+      ctx.textAlign = "left";
+      ctx.fillStyle = mine ? C.black : r.color;
+      ctx.fillText(r.name + (mine ? " (YOU)" : ""), x + 36, cy);
+      ctx.textAlign = "right";
+      ctx.fillStyle = mine ? C.black : C.white;
+      for (let k = 0; k < cols.length; k++) ctx.fillText(String(r[cols[k].key] || 0), cols[k].right, cy);
+      cy += 34;
+    }
+
+    const where = url ? "PLAY FREE AT " + url.replace(/^https?:\/\//, "").replace(/\/$/, "") : "TANK WARS · A 1990 TRIBUTE";
+    ctx.font = "bold 22px " + CARD_FONT;
+    ctx.textAlign = "right";
+    const ww = ctx.measureText(where).width;
+    ctx.fillStyle = "rgba(0,0,0,0.78)";
+    ctx.fillRect(CARD_W - ww - 56, CARD_H - 58, ww + 32, 38);
+    ctx.fillStyle = C.yellow;
+    ctx.fillText(where, CARD_W - 40, CARD_H - 38);
+    return c;
+  }
+
+  const Share = {
+    dialog: null,
+    game: null,
+    blob: null,
+    file: null,
+    imgUrl: "",
+    text: "",
+    url: "",
+
+    isOpen: function () {
+      return !!(this.dialog && this.dialog.open);
+    },
+
+    build: function () {
+      const self = this;
+      const d = document.createElement("dialog");
+      d.className = "share";
+      d.setAttribute("aria-labelledby", "share-title");
+      d.innerHTML =
+        '<p class="share-title" id="share-title" tabindex="-1">SERIES OVER</p>' +
+        '<img class="share-card" width="1200" height="675" alt="" />' +
+        '<p class="share-text"></p>' +
+        '<div class="share-row">' +
+        '<button type="button" data-act="native" hidden>SHARE…</button>' +
+        '<button type="button" data-act="save">SAVE IMAGE</button>' +
+        '<button type="button" data-act="copy">COPY IMAGE</button>' +
+        "</div>" +
+        '<p class="share-links">POST TO' +
+        ' <a data-net="x" target="_blank" rel="noopener">X</a>' +
+        ' <a data-net="facebook" target="_blank" rel="noopener">FACEBOOK</a>' +
+        ' <a data-net="whatsapp" target="_blank" rel="noopener">WHATSAPP</a>' +
+        ' <a data-net="reddit" target="_blank" rel="noopener">REDDIT</a></p>' +
+        '<p class="share-tip">Links can\'t carry the picture. Save or copy it first, then attach it to your post.</p>' +
+        '<p class="share-note" role="status"></p>' +
+        '<div class="share-row share-foot">' +
+        '<button type="button" data-act="rematch">REMATCH</button>' +
+        '<button type="button" data-act="close">CLOSE</button>' +
+        "</div>";
+      document.body.appendChild(d);
+      d.addEventListener("click", function (e) {
+        const b = e.target.closest("[data-act]");
+        if (b) self.act(b.dataset.act);
+      });
+      d.addEventListener("close", function () {
+        flushTaps();
+        if (self.game) self.game.canvas.focus();
+      });
+      this.dialog = d;
+    },
+
+    note: function (text) {
+      this.dialog.querySelector(".share-note").textContent = text;
+    },
+
+    open: function (game) {
+      if (!window.HTMLDialogElement) return;
+      if (!this.dialog) this.build();
+      const self = this;
+      const d = this.dialog;
+      const info = game.shareInfo();
+      const url = siteUrl();
+      const full = url ? info.text + " " + url : info.text;
+      game.shareT = 0;
+      flushTaps();
+      this.game = game;
+      this.text = info.text;
+      this.url = url;
+      this.blob = null;
+      this.file = null;
+      this.note("");
+      d.querySelector(".share-text").textContent = full;
+      const img = d.querySelector(".share-card");
+      img.alt = info.alt;
+      d.querySelector('[data-act="native"]').hidden = true;
+      d.querySelector('[data-act="copy"]').hidden = !(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem);
+      d.querySelector('[data-act="rematch"]').hidden = game.isGuest();
+      const enc = encodeURIComponent;
+      const links = {
+        x: "https://twitter.com/intent/tweet?text=" + enc(info.text) + (url ? "&url=" + enc(url) : ""),
+        facebook: url ? "https://www.facebook.com/sharer/sharer.php?u=" + enc(url) : "",
+        whatsapp: "https://wa.me/?text=" + enc(full),
+        reddit: url ? "https://www.reddit.com/submit?url=" + enc(url) + "&title=" + enc(info.text) : "",
+      };
+      const anchors = d.querySelectorAll("[data-net]");
+      for (let i = 0; i < anchors.length; i++) {
+        const href = links[anchors[i].dataset.net];
+        anchors[i].hidden = !href;
+        if (href) anchors[i].href = href;
+      }
+      renderShareCard(game.finalFrame, info, url).toBlob(function (blob) {
+        if (!blob) return;
+        self.blob = blob;
+        if (self.imgUrl) URL.revokeObjectURL(self.imgUrl);
+        self.imgUrl = URL.createObjectURL(blob);
+        img.src = self.imgUrl;
+        try {
+          self.file = new File([blob], "tank-wars-series.png", { type: "image/png" });
+        } catch (e) {
+          self.file = null;
+        }
+        // Phones (and some desktops) can hand the picture itself to any app.
+        const native = !!(self.file && navigator.canShare && navigator.canShare({ files: [self.file] }));
+        d.querySelector('[data-act="native"]').hidden = !native;
+        d.querySelector(".share-tip").hidden = native;
+      }, "image/png");
+      if (!d.open) d.showModal();
+      d.querySelector(".share-title").focus();
+    },
+
+    act: function (what) {
+      const self = this;
+      if (what === "close") {
+        this.dialog.close();
+        return;
+      }
+      if (what === "rematch") {
+        this.dialog.close();
+        this.game.leaveVictory();
+        return;
+      }
+      if (!this.blob) {
+        this.note("STILL DEVELOPING THE PHOTO…");
+        return;
+      }
+      if (what === "native") {
+        navigator.share({ files: [this.file], title: "Tank Wars", text: this.url ? this.text + " " + this.url : this.text }).then(
+          function () {
+            self.note("SHARED. GOOD SHOOTING.");
+          },
+          function (err) {
+            if (!err || err.name !== "AbortError") self.note("SHARING FAILED. SAVE THE IMAGE INSTEAD.");
+          }
+        );
+      } else if (what === "save") {
+        const a = document.createElement("a");
+        a.href = this.imgUrl;
+        a.download = "tank-wars-series.png";
+        this.dialog.appendChild(a);
+        a.click();
+        a.remove();
+        this.note("SAVED AS tank-wars-series.png");
+      } else if (what === "copy") {
+        navigator.clipboard.write([new ClipboardItem({ "image/png": this.blob })]).then(
+          function () {
+            self.note("IMAGE COPIED. PASTE IT INTO YOUR POST.");
+          },
+          function () {
+            self.note("COPY BLOCKED. SAVE THE IMAGE INSTEAD.");
+          }
+        );
+      }
+    },
   };
 
   // ---------------------------------------------------------------------------
@@ -3631,7 +4053,9 @@
       return;
     }
     if (this.mode === "victory") {
-      this.leaveVictory();
+      const b = this.shareBox;
+      if (b && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) Share.open(this);
+      else this.leaveVictory();
       return;
     }
     if (this.mode === "shop") {

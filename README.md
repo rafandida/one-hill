@@ -76,6 +76,16 @@ npx peer --port 9000
 
 Then open the game with `?broker=your.host:9000` (use `https://…` for a TLS broker). Invite links carry the setting along.
 
+## Sharing a result
+
+When a series ends, the game builds a result card: a 1200×675 PNG of the final blow of the last hill, with who took the series, the score, and every tank's hills, kills, damage, and shots. A dialog opens a moment later:
+
+- **SHARE…** hands the picture itself to any app (Instagram, WhatsApp, Messages, X…). It appears on phones and on browsers that can share files.
+- **SAVE IMAGE** and **COPY IMAGE** for desktops.
+- **POST TO X / FACEBOOK / WHATSAPP / REDDIT** opens a ready-made post with the text and a link to the front page. Those links can't attach the picture, so save or copy it first.
+
+The card and text are told from each screen's player ("I won a Tank Wars series 3-1 against WINDMASTER…", "P2 beat me 3-0…"); online, everyone gets their own. **Esc** closes it; **S** or the **SHARE RESULT** button on the result panel brings it back.
+
 ## Battle controls
 
 Each hill is a new map: **canyon**, **mesa**, or a **water gap** (shells that hit the lake sink). Tanks drop in, then you aim and fire through the wind.
