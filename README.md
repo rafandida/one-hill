@@ -99,7 +99,9 @@ A match is a **best of 5**: first tank to **3 hill wins** takes the series (or t
 | **ROOM** | (online) **HOST** opens a room and shows an invite code · **JOIN** asks for a friend's code |
 | **SOUND** | On / Off |
 
-**← →** change the highlighted value · **↑ ↓** move between rows · **Enter** or **click** to start.
+**← →** change the highlighted value · **↑ ↓** move between rows · **Enter** or **click** to start · **Esc** back to the front page.
+
+The game fills the browser window. The bar above it has **◄ EXIT TO HOME** and a **FULL SCREEN** button (hidden on iPhone, which can't do full screen for a page).
 
 Hotseat opens on `P1 — LOOK AWAY` before the hill is shown, then blanks again before every later human turn. Press **Enter** when the keyboard has been passed.
 
@@ -156,7 +158,7 @@ A centered hit kills. A graze takes a chunk and prints the damage. An HE bomb on
 | **Space** or **Enter** | Fire. During a CPU turn, skip straight to the shot |
 | **T** | Toggle the dotted arc while you have guidance. Firing with it on spends one charge. With none left, the banner says NO GUIDANCE |
 | **M** | Mute / unmute all sound |
-| **Esc** | Back to the title (ends the series) |
+| **Esc** | Back to the title (ends the series). In full screen, the first Esc only leaves full screen |
 
 A **READY?** banner flashes on each turn. A near miss prints **CLOSE!** and a shield prints **BLOCKED**. Wind is in the top bar (`<<<` west, `>>>` east). It changes every turn, sometimes completely, so an aim that hit last time usually needs adjusting. A big change flashes **WIND SHIFT**. Explosions bite craters; tanks fall if the dirt under them disappears. The bottom strip shows the map, series score, cash, shields, and guidance.
 

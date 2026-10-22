@@ -131,6 +131,9 @@
   const MAPS = ["canyon", "mesa", "water"];
   const MAP_LABEL = { canyon: "CANYON", mesa: "MESA", water: "WATER GAP" };
   const WINS_TO_TAKE = 3;
+  // Fire presses this soon after a turn opens are dropped, so mashing Space to
+  // skip a CPU shot doesn't also fire yours.
+  const FIRE_LOCK = 0.35;
 
   const CRATE_KINDS = ["bomb", "bomb", "mirv", "digger", "dirt", "nuke"];
 
@@ -459,6 +462,10 @@
     ) {
       e.preventDefault();
     }
+    // Holding Space or Enter is one press, not a stream of shots.
+    if (e.repeat && (k === " " || k === "Spacebar" || k === "Enter")) return;
+    // Esc in full screen is the browser's; the game shouldn't also quit the series.
+    if ((k === "Escape" || k === "Esc") && document.fullscreenElement) return;
     keys[k] = true;
     if (k.length === 1) keys[k.toLowerCase()] = true;
     taps.push(k);
@@ -1095,6 +1102,7 @@
     this.joinError = "";
     this.turnSeq = 0;
     this.clock = 0;
+    this.fireLock = 0;
     this.waitT = 0;
     this.shopReady = false;
     this.demo = false;
@@ -1510,6 +1518,9 @@
     this.turnNumber++;
     this.turnSeq++;
     this.announceTurn();
+    // Keys pressed while the last shell flew don't carry into this turn.
+    flushTaps();
+    this.fireLock = FIRE_LOCK;
     if (!cur.human) {
       const plan = aiChoose(this, cur);
       this.ai = {
@@ -1719,7 +1730,7 @@
         Sfx.ui();
       }
     }
-    if (consume(" ") || consume("Spacebar") || consume("Enter")) this.tryFire();
+    if ((consume(" ") || consume("Spacebar") || consume("Enter")) && this.fireLock <= 0) this.tryFire();
   };
 
   Game.prototype.nudgeTitle = function (dir) {
@@ -1748,6 +1759,10 @@
   };
 
   Game.prototype.handleTitleInput = function () {
+    if (consume("Escape") || consume("Esc")) {
+      location.href = "./";
+      return;
+    }
     if (consume("ArrowLeft") || consume("a") || consume("A")) this.nudgeTitle(-1);
     if (consume("ArrowRight") || consume("d") || consume("D")) this.nudgeTitle(1);
     if (consume("ArrowUp") || consume("w") || consume("W")) {
@@ -1943,6 +1958,7 @@
 
     if (this.mode === "aim") {
       this.settleTanks(dt);
+      if (this.fireLock > 0) this.fireLock -= dt;
       if (this.net && this.netClock(dt)) return;
       const guest = this.isGuest();
       if (this.ai) {
@@ -2556,6 +2572,7 @@
     this.mode = "aim";
     if (cur.human) Sfx.ui();
     flushTaps();
+    this.fireLock = FIRE_LOCK;
   };
 
   Game.prototype.applyVictory = function (s) {
@@ -3167,7 +3184,7 @@
     ctx.fillStyle = C.white;
     ctx.font = '12px "Courier New", Courier, monospace';
     ctx.textAlign = "center";
-    ctx.fillText("← → change    ↑ ↓ select row    ENTER start", W / 2, 258);
+    ctx.fillText("← → change    ↑ ↓ select row    ENTER start    ESC home", W / 2, 258);
     ctx.fillStyle = C.gray;
     ctx.font = '11px "Courier New", Courier, monospace';
     ctx.fillText("Drag to aim. A short arc is free.  A clean hit ends a tank.", W / 2, 278);
@@ -4106,7 +4123,7 @@
         }
         return;
       }
-      if (aim) this.tryFire();
+      if (aim && this.fireLock <= 0) this.tryFire();
     }
   };
 
@@ -4149,6 +4166,24 @@
       game.onlineRole = "host";
       game.hostOnline();
     }
+  }
+
+  // Menu bar FULL SCREEN button. Hidden where the page can't go full screen
+  // (iPhone). Focus goes back to the canvas so Space fires instead of
+  // pressing the button again.
+  const fullBtn = document.getElementById("full");
+  if (fullBtn && document.fullscreenEnabled) {
+    fullBtn.hidden = false;
+    fullBtn.addEventListener("click", function () {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen().catch(function () {});
+      canvas.focus();
+    });
+    document.addEventListener("fullscreenchange", function () {
+      const on = !!document.fullscreenElement;
+      fullBtn.textContent = on ? "WINDOW" : "FULL SCREEN";
+      fullBtn.setAttribute("aria-pressed", String(on));
+    });
   }
 
   window.addEventListener("paste", function (e) {
