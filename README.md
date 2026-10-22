@@ -1,18 +1,20 @@
-# Tank Wars
+# One Hill
+
+*A Tank Wars tribute.*
 
 <p align="center">
-  <img src="img/readme/hero.gif" alt="The front page: a cyan tank lobs shells at the TANK WARS logo, blows chunks out of it, and the logo rebuilds itself a pixel at a time" width="960" />
+  <img src="img/readme/hero.gif" alt="The front page: a cyan tank lobs shells at the ONE HILL logo, blows chunks out of it, and the logo rebuilds itself a pixel at a time" width="960" />
 </p>
 
 <p align="center"><b>Up to four tanks. One hill. The wind changes every turn.</b></p>
 
 Remember the family 386? The fan noise, the beige box, sixteen glorious colors, and a little tank parked on a brown hill. You nudged the barrel up a few degrees, cranked the power, held your breath, and fired. The shell sailed over the mountain, caught a gust you forgot about, and landed squarely on your own head.
 
-**Tank Wars** brings that afternoon back, in your browser. It's a tribute to Kenny Morse's 1990 MS-DOS shareware classic *Tank Wars* / *Tank Wars 2.5*: VGA palette, turn-based shots, wind, and craters that stay where you dug them. It isn't a pixel-perfect clone, and it definitely isn't a 3D remake. No install, no account, no DOSBox.
+**One Hill** brings that afternoon back, in your browser. It's a tribute to Kenny Morse's 1990 MS-DOS shareware classic *Tank Wars* / *Tank Wars 2.5*: VGA palette, turn-based shots, wind, and craters that stay where you dug them. It isn't a pixel-perfect clone, and it definitely isn't a 3D remake. No install, no account, no DOSBox.
 
 ```text
-C:\> CD TANKWARS
-C:\TANKWARS> TANKWARS.EXE
+C:\> CD ONEHILL
+C:\ONEHILL> ONEHILL.EXE
 Bad command or file name.   (It runs in your browser now. Open index.html.)
 ```
 
@@ -41,7 +43,7 @@ All graphics and sounds are original. Nothing was copied from the DOS binaries.
 <table>
   <tr>
     <td width="50%"><img src="img/readme/title.png" alt="Title screen with mode, difficulty, CPU tanks and sound settings" /></td>
-    <td width="50%"><img src="img/readme/landing.png" alt="The front page: menu bar, TANK WARS logo over a night sky, two tanks on a hill" /></td>
+    <td width="50%"><img src="img/readme/landing.png" alt="The front page: menu bar, ONE HILL logo over a night sky, two tanks on a hill" /></td>
   </tr>
   <tr>
     <td align="center"><sub>The title screen. Pick a mode, pick a fight.</sub></td>
@@ -57,7 +59,7 @@ All graphics and sounds are original. Nothing was copied from the DOS binaries.
   </tr>
   <tr>
     <td width="50%"><img src="img/readme/game-2026.png" alt="2026 mode: black hills on dot-grid paper, a pink tank inside a dashed shield ring, a blue water gap, and a row of keys for the weapons" /></td>
-    <td width="50%"><img src="img/readme/landing-2026.png" alt="2026 front page: the TANK WARS logo on a dot-matrix display, an orange and a blue tank on a charcoal hill" /></td>
+    <td width="50%"><img src="img/readme/landing-2026.png" alt="2026 front page: the ONE HILL logo on a dot-matrix display, an orange and a blue tank on a charcoal hill" /></td>
   </tr>
   <tr>
     <td align="center"><sub>2026 mode. Same water gap, rebuilt as hardware.</sub></td>
@@ -159,7 +161,7 @@ When a series ends, the game builds a result card: a 1200×675 PNG of the final 
 - **SAVE IMAGE** and **COPY IMAGE** for desktops.
 - **POST TO X / FACEBOOK / WHATSAPP / REDDIT** opens a ready-made post with the text and a link to the front page. Those links can't attach the picture, so save or copy it first.
 
-The card and text are told from each screen's player ("I won a Tank Wars series 3-1 against WINDMASTER…", "P2 beat me 3-0…"); online, everyone gets their own. **Esc** closes it; **S** or the **SHARE RESULT** button on the result panel brings it back.
+The card and text are told from each screen's player ("I won a One Hill series 3-1 against WINDMASTER…", "P2 beat me 3-0…"); online, everyone gets their own. **Esc** closes it; **S** or the **SHARE RESULT** button on the result panel brings it back.
 
 ## Battle controls
 
@@ -230,6 +232,12 @@ All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, U
 - **M** during play, or the **SOUND** row on the title screen
 - HUD shows **MUTE** / **SND**
 
+## Publishing
+
+Everything is static: upload the folder to any host that serves HTTPS (GitHub Pages, Netlify, Cloudflare Pages…). There's no build step.
+
+The search and sharing tags assume the site lives at **https://onehill.app/**. If it goes somewhere else, replace that address in `index.html` and `play.html` (canonical link, `og:url`, `og:image`, and the JSON-LD block on the front page), `sitemap.xml` and `robots.txt`. Then submit the sitemap in Google Search Console and Bing Webmaster Tools.
+
 ## Project layout
 
 ```
@@ -241,7 +249,11 @@ play.html       the game page
 styles.css      game page: menu bar, monitor bezel, pixel scaling, 2026 section at the end
 js/net.js       online transport (PeerJS loader, invite codes, peer links)
 js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
-favicon.svg     pixel tank icon
+favicon.svg     pixel tank icon (favicon.ico and img/icon-*.png are the same tank as PNGs)
+robots.txt      lets every crawler in and points to the sitemap
+sitemap.xml     the two pages, for search engines
+site.webmanifest  name, colors and icons for "add to home screen"
+img/og-image.png  the 1200×630 preview shown when a link is shared
 img/demo.png    a real frame from the game, used when motion is reduced (img/demo-2026.jpg in 2026)
 img/readme/     screenshots and GIFs for this README, recorded from the real game
 fonts/          VT323 for 1990; Doto and IBM Plex Mono for 2026 (all SIL Open Font License, see the *-OFL.txt files)
@@ -251,6 +263,6 @@ Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it need
 
 ## Credit
 
-Inspired by *Tank Wars* (1990) by Kenny Morse. This is an independent fan demo, not the original shareware program.
+One Hill is a tribute to *Tank Wars* (1990) by Kenny Morse. It's an independent fan project, not the original shareware program and not affiliated with it. All graphics, sounds and code are original.
 
 Made by [culi.app](https://culi.app) and [Claude](https://claude.com/claude-code). Claude recorded every GIF on this page and fired a few dozen test shells at the logo along the way. It has yet to land a single one on the WARS half. Blame the wind.

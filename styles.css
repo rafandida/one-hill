@@ -186,6 +186,21 @@ body {
   background: #000000;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.noscript {
+  margin: 0;
+  color: #ffff55;
+  text-align: center;
+}
+
 /* The game takes keys at the window; a focus ring on the screen itself is just noise. */
 #game:focus {
   outline: none;

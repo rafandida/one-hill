@@ -1,5 +1,5 @@
 /**
- * Tank Wars — front page toys.
+ * One Hill (a Tank Wars tribute) — front page toys.
  *
  * The hero is a little hill you can shell: the logo is the target, a CPU tank
  * shoots back when you go quiet, and the logo slowly rebuilds itself. Below
@@ -183,6 +183,11 @@
     W: ["##   ##", "##   ##", "##   ##", "## # ##", "#######", "### ###", "##   ##"],
     R: ["##### ", "##  ##", "##  ##", "##### ", "## ## ", "##  ##", "##  ##"],
     S: [" #####", "##    ", "##    ", " #### ", "    ##", "    ##", "##### "],
+    O: [" #### ", "##  ##", "##  ##", "##  ##", "##  ##", "##  ##", " #### "],
+    E: ["######", "##    ", "##    ", "##### ", "##    ", "##    ", "######"],
+    H: ["##  ##", "##  ##", "##  ##", "######", "##  ##", "##  ##", "##  ##"],
+    I: ["##", "##", "##", "##", "##", "##", "##"],
+    L: ["##    ", "##    ", "##    ", "##    ", "##    ", "##    ", "######"],
   };
   const ROWS = 7;
   // Logo cells: 1 shine, 2 upper face, 3 lower face, 4 extrusion, 5 outline.
@@ -271,6 +276,7 @@
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.hud = hud;
+    this.tag = canvas.parentNode.querySelector(".hero-tag");
     this.wind = irand(2, 6) * (Math.random() < 0.5 ? -1 : 1);
     this.time = 0;
     this.running = false;
@@ -334,9 +340,9 @@
         s++;
       }
     }
-    const one = fit(["TANK WARS"]);
-    const two = fit(["TANK", "WARS"]);
-    const logo = two > one ? buildLogo(["TANK", "WARS"], two) : buildLogo(["TANK WARS"], one);
+    const one = fit(["ONE HILL"]);
+    const two = fit(["ONE", "HILL"]);
+    const logo = two > one ? buildLogo(["ONE", "HILL"], two) : buildLogo(["ONE HILL"], one);
     logo.x = Math.round((w - logo.w) / 2);
     logo.y = this.top + Math.round((h * 0.56 - this.top - logo.h) / 2);
     logo.canvas = document.createElement("canvas");
@@ -356,6 +362,8 @@
     } else {
       this.paintSky();
     }
+    // The "a Tank Wars tribute" line sits just under the logo, wherever it landed.
+    if (this.tag) this.tag.style.top = Math.round((logo.y + logo.h) * (cssH / h) + 10) + "px";
     this.updateHud();
   };
 
@@ -390,12 +398,17 @@
     let r = K * 0.3;
     if (ink >= 1 && ink <= 3) {
       color = HW.ink;
-      r = K * 0.42;
+      r = K * 0.44;
     } else if (ink === 4) {
       color = "#bdb9b1";
       r = K * 0.38;
     }
     ctx.fillStyle = color;
+    // Under 4 pixels a cell, round dots blur to gray: draw solid cells and skip the unlit ones.
+    if (K < 4) {
+      if (ink >= 1 && ink <= 4) ctx.fillRect(x * K, y * K, K, K);
+      return;
+    }
     ctx.beginPath();
     ctx.arc(x * K + K / 2, y * K + K / 2, r, 0, Math.PI * 2);
     ctx.fill();
@@ -1246,7 +1259,7 @@
     const lines = body.querySelectorAll(".t-line");
     const first = lines[0];
     const command = first.textContent;
-    // Everything up to the prompt (C:\TANKWARS> or ~/tankwars $) appears at once.
+    // Everything up to the prompt (C:\ONEHILL> or ~/onehill $) appears at once.
     const m = /^.*?[>$] ?/.exec(command);
     const prompt = m ? m[0].length : 0;
     for (let i = 0; i < lines.length; i++) lines[i].classList.add("hide");
