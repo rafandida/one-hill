@@ -232,6 +232,12 @@ All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, U
 - **M** during play, or the **SOUND** row on the title screen
 - HUD shows **MUTE** / **SND**
 
+## Publishing
+
+Everything is static: upload the folder to any host that serves HTTPS (GitHub Pages, Netlify, Cloudflare Pages…). There's no build step.
+
+The search and sharing tags assume the site lives at **https://onehill.app/**. If it goes somewhere else, replace that address in `index.html` and `play.html` (canonical link, `og:url`, `og:image`, and the JSON-LD block on the front page), `sitemap.xml` and `robots.txt`. Then submit the sitemap in Google Search Console and Bing Webmaster Tools.
+
 ## Project layout
 
 ```
@@ -243,7 +249,11 @@ play.html       the game page
 styles.css      game page: menu bar, monitor bezel, pixel scaling, 2026 section at the end
 js/net.js       online transport (PeerJS loader, invite codes, peer links)
 js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
-favicon.svg     pixel tank icon
+favicon.svg     pixel tank icon (favicon.ico and img/icon-*.png are the same tank as PNGs)
+robots.txt      lets every crawler in and points to the sitemap
+sitemap.xml     the two pages, for search engines
+site.webmanifest  name, colors and icons for "add to home screen"
+img/og-image.png  the 1200×630 preview shown when a link is shared
 img/demo.png    a real frame from the game, used when motion is reduced (img/demo-2026.jpg in 2026)
 img/readme/     screenshots and GIFs for this README, recorded from the real game
 fonts/          VT323 for 1990; Doto and IBM Plex Mono for 2026 (all SIL Open Font License, see the *-OFL.txt files)

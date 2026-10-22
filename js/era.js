@@ -11,7 +11,7 @@
 
   const KEY = "tankwars-era";
   const ERAS = ["1990", "2026"];
-  const THEME_COLOR = { 1990: "#0000AA", 2026: "#070a1c" };
+  const THEME_COLOR = { 1990: "#0000AA", 2026: "#f4f3ef" };
 
   function stored() {
     try {
