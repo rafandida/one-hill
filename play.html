@@ -3,6 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Google tag (gtag.js). Skipped for ?demo, the attract-mode game the front page
+         embeds, so a front-page visit doesn't also count as a game-page view. -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      if (!/[?&]demo\b/.test(location.search)) {
+        const tag = document.createElement("script");
+        tag.async = true;
+        tag.src = "https://www.googletagmanager.com/gtag/js?id=G-55PL2Q7BF8";
+        document.head.appendChild(tag);
+        gtag("js", new Date());
+        gtag("config", "G-55PL2Q7BF8");
+      }
+    </script>
     <title>Play One Hill — Tank Artillery vs CPU, Hotseat or Online</title>
     <meta
       name="description"
