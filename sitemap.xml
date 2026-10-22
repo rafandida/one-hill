@@ -6,7 +6,7 @@
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://onehill.app/img/og-image.png</image:loc>
+      <image:loc>https://onehill.app/og-image.png</image:loc>
     </image:image>
     <image:image>
       <image:loc>https://onehill.app/img/demo.png</image:loc>

@@ -253,7 +253,7 @@ favicon.svg     pixel tank icon (favicon.ico and img/icon-*.png are the same tan
 robots.txt      lets every crawler in and points to the sitemap
 sitemap.xml     the two pages, for search engines
 site.webmanifest  name, colors and icons for "add to home screen"
-img/og-image.png  the 1200×630 preview shown when a link is shared
+og-image.png    the 1200×630 preview shown when a link is shared
 img/demo.png    a real frame from the game, used when motion is reduced (img/demo-2026.jpg in 2026)
 img/readme/     screenshots and GIFs for this README, recorded from the real game
 fonts/          VT323 for 1990; Doto and IBM Plex Mono for 2026 (all SIL Open Font License, see the *-OFL.txt files)
