@@ -94,7 +94,7 @@
       id: "nuke",
       name: "NUKE",
       short: "NUKE",
-      blurb: "NUKE — huge blast. Buy one, or catch a crate.",
+      blurb: "NUKE — huge blast. Buy one, or shoot a crate.",
       key: "5",
       ammo: 0,
       radius: 46,
@@ -678,6 +678,12 @@
       }
     }
     if (punched) addShake(game, r > 20 ? 8 : 5);
+    // Tanks never drive, so a crate is claimed by shooting it: one caught in
+    // the blast goes to whoever fired.
+    for (let i = game.crates.length - 1; i >= 0; i--) {
+      const c = game.crates[i];
+      if (Math.hypot(c.x - cx, c.y - 2 - cy) < r + 6) claimCrate(game, i, owner);
+    }
     game.explosions.push({
       x: cx,
       y: cy,
@@ -813,22 +819,35 @@
         const tank = game.tanks[t];
         if (!tank.alive) continue;
         if (Math.abs(tank.x - c.x) < 14 && Math.abs(tank.y - c.y) < 16) {
-          grantLoot(tank, c.kind);
-          burst(game, c.x, c.y, 10, {
-            colors: [C.yellow, C.white, C.lgreen],
-            spd: 60,
-            up: 40,
-            g: false,
-            life: 0.3,
-          });
-          Sfx.pickup();
-          game.banner = tank.name + "  +" + c.kind.toUpperCase();
-          game.bannerT = 0.9;
-          game.crates.splice(i, 1);
+          claimCrate(game, i, tank);
           break;
         }
       }
     }
+  }
+
+  /** Crate i's rounds go to tank. With nobody left to take them, it just bursts. */
+  function claimCrate(game, i, tank) {
+    const c = game.crates[i];
+    game.crates.splice(i, 1);
+    burst(game, c.x, c.y, 10, {
+      colors: [C.yellow, C.white, C.lgreen],
+      spd: 60,
+      up: 40,
+      g: false,
+      life: 0.3,
+    });
+    if (!tank || !tank.alive) return;
+    grantLoot(tank, c.kind);
+    // The banner gives way to the next turn's almost at once; the callout stays.
+    callout(game, c.x, c.y - 14, "+" + c.kind.toUpperCase(), C.lgreen);
+    Sfx.pickup();
+    game.banner = tank.name + "  +" + c.kind.toUpperCase();
+    game.bannerT = 0.9;
+  }
+
+  function crateHit(c, x, y) {
+    return Math.abs(x - c.x) <= 6 && y >= c.y - 7 && y <= c.y + 2;
   }
 
   function stepShots(game, dt) {
@@ -896,6 +915,13 @@
               p.dead = true;
               break;
             }
+          }
+          for (let k = game.crates.length - 1; k >= 0 && !p.dead; k--) {
+            if (!crateHit(game.crates[k], p.x, p.y)) continue;
+            claimCrate(game, k, p.owner);
+            if (p.weapon.kind === "mound") applyMound(game, p.x, p.y, p.weapon);
+            else applyBlast(game, p.x, p.y, p.weapon, p.owner);
+            p.dead = true;
           }
           if (p.dead) break;
         }
@@ -3190,7 +3216,7 @@
     ctx.fillText("Drag to aim. A short arc is free.  A clean hit ends a tank.", W / 2, 278);
     ctx.fillText("A/D angle  W/S power  SPACE fire  1-6 weapons  T arc  M mute", W / 2, 298);
     ctx.fillStyle = C.dgray;
-    ctx.fillText("Kills pay. Shop between hills. Water swallows shells.", W / 2, 322);
+    ctx.fillText("Kills pay. Shoot crates for loot. Water swallows shells.", W / 2, 322);
   };
 
   Game.prototype.drawVictory = function (ctx) {

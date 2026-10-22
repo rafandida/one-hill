@@ -20,7 +20,7 @@ What's on the hill:
 
 - **Terrain you can wreck.** Every hill is a new canyon, mesa, or water gap. Blow the dirt out from under a tank and down it goes.
 - **Wind with a grudge.** It changes every turn, sometimes completely. The shot that worked last time is lying to you now.
-- **A shop between hills.** Spend your kill money on HE bombs, MIRVs, dirt bombs, shields, guidance, and a $1200 nuke labeled *do not miss*.
+- **A shop between hills.** Spend your kill money on HE bombs, MIRVs, dirt bombs, shields, guidance, and a $1200 nuke labeled *do not miss*. Or get them free: shoot the loot crates that drop mid-battle.
 - **CPU rivals with attitude.** *Rookie*, *Lobber*, and *Windmaster* take you on one at a time. Add more and *Viper*, *Hammer*, and *Brutus* go free-for-all, shooting whoever is closest, including each other.
 - **Couch warfare.** Hotseat for 2–4 people on one keyboard, with a `LOOK AWAY` screen so nobody peeks at your aim.
 - **Online with a five-letter code.** Send a friend `K7Q4M` and you're on the same hill, peer-to-peer, with no server to run.
@@ -162,6 +162,20 @@ A centered hit kills. A graze takes a chunk and prints the damage. An HE bomb on
 
 A **READY?** banner flashes on each turn. A near miss prints **CLOSE!** and a shield prints **BLOCKED**. Wind is in the top bar (`<<<` west, `>>>` east). It changes every turn, sometimes completely, so an aim that hit last time usually needs adjusting. A big change flashes **WIND SHIFT**. Explosions bite craters; tanks fall if the dirt under them disappears. The bottom strip shows the map, series score, cash, shields, and guidance.
 
+### Loot crates
+
+Every few turns, and after every kill, a blinking supply crate drops onto the hill. Tanks can't drive, so you claim a crate by **shooting it**. Hit it, or land a blast close enough to catch it, and its rounds go to whoever fired, with a green **+NUKE** (or whatever was inside) over the spot. Anyone can take it, CPU tanks included.
+
+| Crate | You get |
+| --- | --- |
+| BOMB | 2 HE bombs |
+| MIRV | 1 MIRV |
+| DIGGER | 1 digger |
+| DIRT | 1 dirt bomb |
+| NUKE | 1 nuke |
+
+Bigger weapons catch crates from farther away: a shell has to land within about 20 px, an HE bomb about 34, a nuke about 52.
+
 ### Shop
 
 Between hills, each tank spends cash. A hill win pays **$700**, a kill **$400**, surviving without the win **$150**. You start with **$250**.
@@ -175,7 +189,7 @@ Between hills, each tank spends cash. A hill win pays **$700**, a kill **$400**,
 | SHIELD | $650 | Blocks the next hit, including a fall |
 | NUKE | $1200 | Huge blast |
 
-**↑ ↓** pick, **Enter** buy, **N** finished, or click a row. CPU tanks buy on their own. Ammo you do not fire carries to the next hill. Crates in a battle still drop extra rounds.
+**↑ ↓** pick, **Enter** buy, **N** finished, or click a row. CPU tanks buy on their own. Ammo you do not fire carries to the next hill, and so does anything you won from a crate.
 
 ### Weapons
 
