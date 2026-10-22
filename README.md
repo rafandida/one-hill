@@ -215,4 +215,4 @@ Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it need
 
 Inspired by *Tank Wars* (1990) by Kenny Morse. This is an independent fan demo, not the original shareware program.
 
-Made by [culi.app](https://culi.app).
+Made by [culi.app](https://culi.app) and [Claude](https://claude.com/claude-code). Claude recorded every GIF on this page and fired a few dozen test shells at the logo along the way. It has yet to land a single one on the WARS half. Blame the wind.
