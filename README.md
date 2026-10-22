@@ -1,8 +1,60 @@
 # Tank Wars
 
-A playable browser tribute to Kenny Morse’s 1990 MS-DOS shareware artillery game *Tank Wars* / *Tank Wars 2.5*. VGA palette, turn-based shots, wind, craters — not a pixel-perfect clone and not a modern 3D remake.
+<p align="center">
+  <img src="img/readme/hero.gif" alt="The front page: a cyan tank lobs shells at the TANK WARS logo, blows chunks out of it, and the logo rebuilds itself a pixel at a time" width="960" />
+</p>
 
-All graphics and sounds are original. Beeps are generated in the browser (Web Audio oscillators + noise). Nothing was copied from the DOS binaries.
+<p align="center"><b>Up to four tanks. One hill. The wind changes every turn.</b></p>
+
+Remember the family 386? The fan noise, the beige box, sixteen glorious colors, and a little tank parked on a brown hill. You nudged the barrel up a few degrees, cranked the power, held your breath, and fired. The shell sailed over the mountain, caught a gust you forgot about, and landed squarely on your own head.
+
+**Tank Wars** brings that afternoon back, in your browser. It's a tribute to Kenny Morse's 1990 MS-DOS shareware classic *Tank Wars* / *Tank Wars 2.5*: VGA palette, turn-based shots, wind, and craters that stay where you dug them. It isn't a pixel-perfect clone, and it definitely isn't a 3D remake. No install, no account, no DOSBox.
+
+```text
+C:\> CD TANKWARS
+C:\TANKWARS> TANKWARS.EXE
+Bad command or file name.   (It runs in your browser now. Open index.html.)
+```
+
+What's on the hill:
+
+- **Terrain you can wreck.** Every hill is a new canyon, mesa, or water gap. Blow the dirt out from under a tank and down it goes.
+- **Wind with a grudge.** It changes every turn, sometimes completely. The shot that worked last time is lying to you now.
+- **A shop between hills.** Spend your kill money on HE bombs, MIRVs, dirt bombs, shields, guidance, and a $1200 nuke labeled *do not miss*.
+- **CPU rivals with attitude.** *Rookie*, *Lobber*, and *Windmaster* take you on one at a time. Add more and *Viper*, *Hammer*, and *Brutus* go free-for-all, shooting whoever is closest, including each other.
+- **Couch warfare.** Hotseat for 2–4 people on one keyboard, with a `LOOK AWAY` screen so nobody peeks at your aim.
+- **Online with a five-letter code.** Send a friend `K7Q4M` and you're on the same hill, peer-to-peer, with no server to run.
+- **Bragging rights.** Finish a series and the game hands you a result card of the final blow, ready to post.
+- **Bleeps and booms.** Every sound is synthesized live in the browser with Web Audio oscillators and noise.
+
+All graphics and sounds are original. Nothing was copied from the DOS binaries.
+
+## Screenshots
+
+<p align="center">
+  <img src="img/readme/battle.gif" alt="Attract mode: VIPER lands the killing shot and takes the hill, the tanks shop for weapons, and on the next hill a nuke goes off" width="640" />
+  <br />
+  <sub>Attract mode, three CPU tanks on HARD: a kill shot, the hill taken, a quick shopping trip, and then somebody buys the nuke.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="img/readme/title.png" alt="Title screen with mode, difficulty, CPU tanks and sound settings" /></td>
+    <td width="50%"><img src="img/readme/landing.png" alt="The front page: menu bar, TANK WARS logo over a night sky, two tanks on a hill" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>The title screen. Pick a mode, pick a fight.</sub></td>
+    <td align="center"><sub>The front page. Yes, you can shoot the logo.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="img/readme/hill.png" alt="VIPER TAKES THE HILL panel with kill and win payouts and the series score" /></td>
+    <td width="50%"><img src="img/readme/shop.png" alt="Supply screen between hills listing HE bomb, MIRV, dirt bomb, guidance, shield and nuke prices" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Last tank standing takes the hill, and the payout.</sub></td>
+    <td align="center"><sub>Between hills, everybody goes shopping.</sub></td>
+  </tr>
+</table>
 
 ## Run it
 
@@ -153,6 +205,7 @@ js/net.js       online transport (PeerJS loader, invite codes, peer links)
 js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
 favicon.svg     pixel tank icon
 img/demo.png    a real frame from the game, used when motion is reduced
+img/readme/     screenshots and GIFs for this README, recorded from the real game
 fonts/          VT323 (SIL Open Font License, see VT323-OFL.txt)
 ```
 
@@ -161,3 +214,5 @@ Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it need
 ## Credit
 
 Inspired by *Tank Wars* (1990) by Kenny Morse. This is an independent fan demo, not the original shareware program.
+
+Made by [culi.app](https://culi.app).
