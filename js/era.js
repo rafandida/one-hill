@@ -1,5 +1,5 @@
 /**
- * Tank Wars — the 1990 / 2026 switch, shared by the front page and the game.
+ * One Hill (a Tank Wars tribute) — the 1990 / 2026 switch, shared by the front page and the game.
  *
  * Loaded in <head>, before the stylesheets apply, so the page paints in the
  * right era from its first frame. The choice is remembered, a ?era=2026 link

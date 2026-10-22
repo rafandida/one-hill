@@ -1,5 +1,5 @@
 /**
- * Tank Wars — browser tribute to Kenny Morse's 1990 MS-DOS artillery game.
+ * One Hill — a browser tribute to Kenny Morse's 1990 MS-DOS artillery game Tank Wars.
  * Original graphics only (no proprietary assets). Vanilla canvas, no deps.
  *
  * Extend: add entries to WEAPONS, or hook new states in Game.tick / Game.draw.
@@ -2891,7 +2891,7 @@
     }
     Sfx.ui();
     if (url && navigator.share && window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
-      navigator.share({ title: "Tank Wars", text: "Join my Tank Wars hill: " + net.code, url: url }).catch(function () {});
+      navigator.share({ title: "One Hill", text: "Join my One Hill game: " + net.code, url: url }).catch(function () {});
       return;
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -3508,9 +3508,9 @@
     if (!tank || MENU_MODES[this.mode]) {
       ctx.fillStyle = C.yellow;
       ctx.textAlign = "left";
-      ctx.fillText("TANK WARS", 8, y);
+      ctx.fillText("ONE HILL", 8, y);
       ctx.fillStyle = C.gray;
-      ctx.fillText(MODERN ? "MODEL TW-26" : "SHAREWARE TRIBUTE", 120, y);
+      ctx.fillText(MODERN ? "TANK WARS TRIBUTE · OH-26" : "TANK WARS TRIBUTE", 120, y);
       ctx.fillStyle = Sfx.muted ? C.lred : C.lgreen;
       ctx.textAlign = "right";
       ctx.fillText(Sfx.muted ? "MUTE" : "SND", W - 10, y);
@@ -3715,10 +3715,10 @@
     ctx.textBaseline = "top";
     ctx.fillStyle = MODERN ? C.black : C.yellow;
     ctx.font = font(36, true);
-    ctx.fillText("TANK WARS", W / 2, 60);
+    ctx.fillText("ONE HILL", W / 2, 60);
     ctx.fillStyle = C.lcyan;
     ctx.font = font(14);
-    ctx.fillText(MODERN ? "2026    model TW-26" : "2.5    a shareware tribute", W / 2, 102);
+    ctx.fillText(MODERN ? "a Tank Wars tribute  ·  2026" : "a Tank Wars tribute", W / 2, 102);
     ctx.fillStyle = C.gray;
     ctx.font = font(11);
     ctx.fillText("Inspired by Kenny Morse, 1990  ·  original graphics", W / 2, 124);
@@ -4352,7 +4352,7 @@
     let headline = champ ? champ.name + " TAKES THE SERIES" : "SERIES DRAWN";
     let text;
     if (!champ) {
-      text = "A drawn series of Tank Wars, " + score + ". Nobody could read the wind.";
+      text = "A drawn series of One Hill, " + score + ". Nobody could read the wind.";
     } else if (me && champ.id === me.id) {
       headline = "YOU TAKE THE SERIES";
       const foes = roster
@@ -4366,11 +4366,11 @@
       let tally = kills + (kills === 1 ? " kill" : " kills");
       if (me.dmg) tally += ", " + me.dmg + " damage";
       text =
-        "I won a Tank Wars series " + score + " against " + listNames(foes) + ": " + tally + ". Think you can read the wind?";
+        "I won a One Hill series " + score + " against " + listNames(foes) + ": " + tally + ". Think you can read the wind?";
     } else if (me) {
-      text = champ.name + " beat me " + score + " in Tank Wars. I want a rematch.";
+      text = champ.name + " beat me " + score + " in One Hill. I want a rematch.";
     } else {
-      text = champ.name + " won a " + roster.length + "-player hotseat series of Tank Wars, " + score + ".";
+      text = champ.name + " won a " + roster.length + "-player hotseat series of One Hill, " + score + ".";
     }
     return {
       rows: rows,
@@ -4379,7 +4379,7 @@
       mode: mode,
       headline: headline,
       text: text,
-      alt: "Tank Wars result card: " + headline + ", " + score + ", " + mode + ", over the final shot of the series.",
+      alt: "One Hill result card: " + headline + ", " + score + ", " + mode + ", over the final shot of the series.",
     };
   };
 
@@ -4433,7 +4433,7 @@
     ctx.textAlign = "left";
     ctx.font = font(36, true);
     ctx.fillStyle = C.yellow;
-    ctx.fillText("TANK WARS", 30, 28);
+    ctx.fillText("ONE HILL", 30, 28);
     ctx.textAlign = "right";
     ctx.font = font(22, true);
     ctx.fillStyle = C.lcyan;
@@ -4521,7 +4521,7 @@
       cy += 34;
     }
 
-    const tagline = MODERN ? "TANK WARS · MODEL TW-26" : "TANK WARS · A 1990 TRIBUTE";
+    const tagline = "ONE HILL · A TANK WARS TRIBUTE";
     const where = url ? "PLAY FREE AT " + url.replace(/^https?:\/\//, "").replace(/\/$/, "") : tagline;
     ctx.font = font(22, true);
     ctx.textAlign = "right";
@@ -4629,7 +4629,7 @@
         self.imgUrl = URL.createObjectURL(blob);
         img.src = self.imgUrl;
         try {
-          self.file = new File([blob], "tank-wars-series.png", { type: "image/png" });
+          self.file = new File([blob], "one-hill-series.png", { type: "image/png" });
         } catch (e) {
           self.file = null;
         }
@@ -4658,7 +4658,7 @@
         return;
       }
       if (what === "native") {
-        navigator.share({ files: [this.file], title: "Tank Wars", text: this.url ? this.text + " " + this.url : this.text }).then(
+        navigator.share({ files: [this.file], title: "One Hill", text: this.url ? this.text + " " + this.url : this.text }).then(
           function () {
             self.note("SHARED. GOOD SHOOTING.");
           },
@@ -4669,11 +4669,11 @@
       } else if (what === "save") {
         const a = document.createElement("a");
         a.href = this.imgUrl;
-        a.download = "tank-wars-series.png";
+        a.download = "one-hill-series.png";
         this.dialog.appendChild(a);
         a.click();
         a.remove();
-        this.note("SAVED AS tank-wars-series.png");
+        this.note("SAVED AS one-hill-series.png");
       } else if (what === "copy") {
         navigator.clipboard.write([new ClipboardItem({ "image/png": this.blob })]).then(
           function () {

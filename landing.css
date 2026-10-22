@@ -280,6 +280,22 @@ a:hover {
   outline-offset: -8px;
 }
 
+.hero-tag {
+  position: absolute;
+  top: 46%;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  margin: 0;
+  font-size: clamp(20px, 2.4vw, 28px);
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--lcyan);
+  text-shadow: 3px 3px 0 var(--black);
+  pointer-events: none;
+}
+
 .hud {
   position: absolute;
   top: 0;
@@ -1386,6 +1402,26 @@ kbd.down {
   background: var(--lcd);
   border: 0;
   border-radius: 6px;
+}
+
+[data-era="2026"] .hero-tag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--ink-2);
+  text-shadow: none;
+}
+
+[data-era="2026"] .hero-tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--signal);
+  border-radius: 50%;
 }
 
 [data-era="2026"] .hud b {

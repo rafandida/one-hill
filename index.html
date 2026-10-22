@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tank Wars — VGA artillery in your browser</title>
+    <title>One Hill · a Tank Wars tribute</title>
     <meta
       name="description"
-      content="Turn-based artillery in the style of the 1990 DOS classic. 1 to 4 players: vs CPU, hotseat, or online with an invite code. Free, in your browser."
+      content="One Hill is a tribute to the 1990 DOS classic Tank Wars: turn-based artillery for 1 to 4 players, vs CPU, hotseat, or online with an invite code. Free, in your browser."
     />
-    <meta property="og:title" content="Tank Wars" />
+    <meta property="og:title" content="One Hill · a Tank Wars tribute" />
     <meta property="og:description" content="Up to four tanks. One hill. The wind changes every turn." />
     <meta name="theme-color" content="#0000AA" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -24,7 +24,7 @@
     <a class="skip" href="#main">Skip to content</a>
 
     <header class="menubar">
-      <a class="menubar-home" href="#top"><img src="favicon.svg" alt="" width="18" height="18" /> <span>TANK WARS</span></a>
+      <a class="menubar-home" href="#top"><img src="favicon.svg" alt="" width="18" height="18" /> <span>ONE HILL</span></a>
       <nav aria-label="Page sections">
         <ul>
           <li><a href="play.html"><span class="hot">P</span>lay</a></li>
@@ -43,7 +43,7 @@
 
     <main id="main">
       <section class="hero" id="top" aria-labelledby="hero-title">
-        <h1 id="hero-title" class="sr-only">Tank Wars</h1>
+        <h1 id="hero-title" class="sr-only">One Hill, a Tank Wars tribute</h1>
         <div class="hud" aria-hidden="true">
           <span class="hud-you">YOU</span>
           <span>ANG <b data-hud="ang">045</b></span>
@@ -56,16 +56,17 @@
           class="field"
           tabindex="0"
           role="img"
-          aria-label="A hill at night with the Tank Wars logo in the sky. Click, tap, or press Enter to lob a shell at it."
+          aria-label="A hill with the One Hill logo in the sky. Click, tap, or press Enter to lob a shell at it."
         ></canvas>
+        <p class="hero-tag" aria-hidden="true">a Tank Wars tribute</p>
       </section>
 
       <section class="layer surface" aria-label="Start playing">
         <div class="wrap">
           <p class="lede"><span>Up to four tanks.</span> <span>One hill.</span> <em>The wind changes every turn.</em></p>
           <p class="sub">
-            <span class="e90">Tank Wars is turn-based artillery in the style of the 1990 DOS classic.</span>
-            <span class="e26">The 1990 DOS artillery classic, rebuilt for 2026.</span>
+            <span class="e90">One Hill is turn-based artillery, a tribute to the 1990 DOS classic Tank Wars.</span>
+            <span class="e26">A tribute to the 1990 DOS classic Tank Wars, rebuilt for 2026.</span>
             Set an angle, set the power, lob a shell over the mountain, and find out whether the wind turned on you.
           </p>
           <div class="cta">
@@ -87,14 +88,14 @@
               <iframe
                 class="crt-live"
                 data-src="play.html?demo"
-                title="Tank Wars attract mode: three CPU tanks playing a live match"
+                title="One Hill attract mode: three CPU tanks playing a live match"
                 tabindex="-1"
                 aria-hidden="true"
               ></iframe>
               <a class="crt-cover" href="play.html"><span>PRESS START</span></a>
             </div>
             <div class="crt-chin" aria-hidden="true">
-              <span class="crt-badge"><span class="e90">VGA</span><span class="e26">TW-26</span></span>
+              <span class="crt-badge"><span class="e90">VGA</span><span class="e26">OH-26</span></span>
               <span class="crt-knobs"><i></i><i></i></span>
               <span class="crt-led"></span>
             </div>
@@ -175,8 +176,8 @@
       <section class="layer layer-4" id="online" aria-labelledby="online-title">
         <div class="wrap split split-online">
           <div class="term" aria-hidden="true">
-            <p class="term-bar"><span class="e90">C:\TANKWARS\PLAY.EXE</span><span class="e26">TERMINAL · ONLINE</span></p>
-            <pre class="term-body e90"><span class="t-line">C:\TANKWARS&gt; PLAY /ONLINE /HOST</span>
+            <p class="term-bar"><span class="e90">C:\ONEHILL\PLAY.EXE</span><span class="e26">TERMINAL · ONLINE</span></p>
+            <pre class="term-body e90"><span class="t-line">C:\ONEHILL&gt; PLAY /ONLINE /HOST</span>
 <span class="t-line">Opening room ........ <i class="ok">OK</i></span>
 <span class="t-line">INVITE CODE: <i class="code">K7Q4M</i></span>
 <span class="t-line"><i class="p2">P2</i> joined.</span>
@@ -184,8 +185,8 @@
 <span class="t-line"><i class="p4">WINDMASTER</i> takes seat 4.</span>
 <span class="t-line">WIND &lt;&lt;&lt; 7    <i class="p2">P2</i> AIMING  0:31</span>
 <span class="t-line"><i class="boom">*BOOM*</i>  <i class="p3">P3</i> -62</span>
-<span class="t-line">C:\TANKWARS&gt; <i class="cursor">_</i></span></pre>
-            <pre class="term-body e26"><span class="t-line">~/tankwars $ tankwars host --online</span>
+<span class="t-line">C:\ONEHILL&gt; <i class="cursor">_</i></span></pre>
+            <pre class="term-body e26"><span class="t-line">~/onehill $ onehill host --online</span>
 <span class="t-line">Opening room ........ <i class="ok">ok</i></span>
 <span class="t-line">Invite code  <i class="code">K7Q4M</i></span>
 <span class="t-line"><i class="p2">p2</i> joined</span>
@@ -193,7 +194,7 @@
 <span class="t-line"><i class="p4">windmaster</i> took seat 4</span>
 <span class="t-line">wind ◂◂◂ 7    <i class="p2">p2</i> aiming  0:31</span>
 <span class="t-line"><i class="boom">boom</i>  <i class="p3">p3</i> −62</span>
-<span class="t-line">~/tankwars $ <i class="cursor">▍</i></span></pre>
+<span class="t-line">~/onehill $ <i class="cursor">▍</i></span></pre>
           </div>
           <div class="win">
             <p class="win-title">ONLINE</p>
@@ -290,14 +291,14 @@
       <div class="wrap">
         <div class="win win-gray win-reg">
           <p class="win-title"><span class="e90">REGISTER.TXT</span><span class="e26">PRICING</span></p>
-          <pre class="e90">TANK WARS is free. There is nothing to register.
+          <pre class="e90">ONE HILL is free. There is nothing to register.
 
 Registration fee ...... $0.00
 Cheques payable to .... nobody
 Mail to ............... nowhere
 
 Send a friend an invite code instead.</pre>
-          <pre class="e26">Tank Wars is free. Still. Even in 2026.
+          <pre class="e26">One Hill is free. Still. Even in 2026.
 
 Subscription .......... $0.00/mo
 Battle pass ........... no
@@ -311,7 +312,7 @@ Send a friend an invite code instead.</pre>
           Made by <a href="https://culi.app">culi.app</a> ·
           <a href="https://github.com/rafandida/90-s-Tank-War">Source on GitHub</a>
         </p>
-        <p class="prompt" aria-hidden="true"><span class="e90">C:\TANKWARS&gt;</span><span class="e26">~/tankwars $ </span><span class="cursor">_</span></p>
+        <p class="prompt" aria-hidden="true"><span class="e90">C:\ONEHILL&gt;</span><span class="e26">~/onehill $ </span><span class="cursor">_</span></p>
       </div>
     </footer>
 

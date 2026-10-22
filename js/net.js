@@ -1,5 +1,5 @@
 /**
- * Tank Wars — online transport.
+ * One Hill (a Tank Wars tribute) — online transport.
  *
  * Browsers talk peer-to-peer over WebRTC data channels (PeerJS). The free
  * PeerJS cloud broker only introduces them: the host registers an ID built
