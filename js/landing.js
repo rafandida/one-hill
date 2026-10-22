@@ -25,7 +25,41 @@
     yellow: "#FFFF55",
     white: "#FFFFFF",
   };
+  // 2026: VGA colors as the industrial palette sees them (see js/era.js).
+  // Your tank goes signal orange, the CPU blue; the logo's inks go to ink.
+  const MODERN = {
+    "#000000": "#111111",
+    "#0000AA": "#1f4fff",
+    "#00AA00": "#00a36c",
+    "#00AAAA": "#c43c00",
+    "#AA0000": "#5f5c56",
+    "#AA00AA": "#1438b8",
+    "#AA5500": "#3a3835",
+    "#AAAAAA": "#9a968e",
+    "#555555": "#5f5c56",
+    "#55FFFF": "#ff4f00",
+    "#FF5555": "#ff4f00",
+    "#FF55FF": "#1f4fff",
+    "#FFFF55": "#111111",
+    "#FFFFFF": "#111111",
+    "#774400": "#2a2927",
+  };
+  const HW = { paper: "#f4f3ef", ink: "#111111", signal: "#ff4f00" };
+  const MODERN_FONT = '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace';
   const reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  function isModern() {
+    return !!(window.TankEra && window.TankEra.get() === "2026");
+  }
+
+  function modern(color) {
+    return MODERN[color] || color;
+  }
+
+  /** ctx.roundRect where it exists, a plain rect where it doesn't. */
+  function roundRect(ctx, x, y, w, h, r) {
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else ctx.rect(x, y, w, h);
+  }
 
   function rand(a, b) {
     return a + Math.random() * (b - a);
@@ -106,17 +140,34 @@
       src.stop(t + dur);
     },
 
+    // 2026 swaps square and sawtooth beeps for rounder sine and triangle
+    // tones, deeper booms, and softer clicks.
     fire: function () {
+      if (isModern()) {
+        this.slide(190, 58, 0.2, "triangle", 0.09);
+        this.noise(0.14, 0.05, 900);
+        return;
+      }
       this.slide(220, 70, 0.16, "square", 0.06);
       this.noise(0.1, 0.07, 1400);
     },
 
     boom: function (big) {
+      if (isModern()) {
+        this.slide(big ? 95 : 120, 28, big ? 0.6 : 0.34, "sine", big ? 0.2 : 0.13);
+        this.noise(big ? 0.55 : 0.3, big ? 0.14 : 0.09, big ? 520 : 760);
+        this.slide(1400, 380, 0.22, "sine", 0.012);
+        return;
+      }
       this.noise(big ? 0.4 : 0.22, big ? 0.18 : 0.11, big ? 700 : 1100);
       this.slide(big ? 140 : 180, 40, big ? 0.32 : 0.18, "sawtooth", 0.04);
     },
 
     blip: function () {
+      if (isModern()) {
+        this.slide(1046, 1318, 0.07, "sine", 0.035);
+        return;
+      }
       this.slide(740, 740, 0.05, "square", 0.03);
     },
   };
@@ -239,8 +290,12 @@
     this.h = h;
     this.cssW = cssW;
     this.cssH = cssH;
-    this.canvas.width = w;
-    this.canvas.height = h;
+    // 2026 keeps the same little world but draws it with clean shapes at
+    // screen resolution: k backing pixels per world pixel.
+    this.modern = isModern();
+    this.k = this.modern ? Math.min(px * (window.devicePixelRatio || 1), 2400 / w) : 1;
+    this.canvas.width = Math.round(w * this.k);
+    this.canvas.height = Math.round(h * this.k);
     this.top = Math.ceil(36 / px);
     this.gravity = h * 0.95;
 
@@ -295,8 +350,85 @@
     for (let i = 0; i < logo.grid.length; i++) if (logo.grid[i]) logo.total++;
     this.logo = logo;
 
-    this.paintSky();
+    if (this.modern) {
+      this.paintModernLogo();
+      this.paintModernPaper();
+    } else {
+      this.paintSky();
+    }
     this.updateHud();
+  };
+
+  // ---------------------------------------------------------------------------
+  // 2026 hero: the logo on a dot-matrix display, hills on dot-grid paper
+  // ---------------------------------------------------------------------------
+  Field.prototype.paintModernLogo = function () {
+    const L = this.logo;
+    const K = Math.max(2, Math.round(this.k));
+    L.K = K;
+    L.dots = document.createElement("canvas");
+    L.dots.width = L.w * K;
+    L.dots.height = L.h * K;
+    L.dotsCtx = L.dots.getContext("2d");
+    for (let i = 0; i < L.grid.length; i++) this.modernCell(i);
+  };
+
+  /**
+   * Repaint one dot of the 2026 logo after it was shot out or grew back. Lit
+   * letters are ink, the old extrusion is a gray shadow, and every other cell
+   * is an unlit dot, like the panel of a real display.
+   */
+  Field.prototype.modernCell = function (i) {
+    const L = this.logo;
+    const K = L.K;
+    const x = i % L.w;
+    const y = Math.floor(i / L.w);
+    const ctx = L.dotsCtx;
+    ctx.clearRect(x * K, y * K, K, K);
+    const ink = L.grid[i];
+    let color = "#e4e1db";
+    let r = K * 0.3;
+    if (ink >= 1 && ink <= 3) {
+      color = HW.ink;
+      r = K * 0.42;
+    } else if (ink === 4) {
+      color = "#bdb9b1";
+      r = K * 0.38;
+    }
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x * K + K / 2, y * K + K / 2, r, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  /** Off-white paper with a dot grid, plus the dot texture used inside the hills. */
+  Field.prototype.paintModernPaper = function () {
+    const k = this.k;
+    const w = this.w;
+    const h = this.h;
+    function sheet(bg, dot, step, r) {
+      const c = document.createElement("canvas");
+      c.width = Math.round(w * k);
+      c.height = Math.round(h * k);
+      const ctx = c.getContext("2d");
+      ctx.scale(k, k);
+      if (bg) {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+      }
+      ctx.fillStyle = dot;
+      for (let y = step / 2; y < h; y += step) {
+        for (let x = step / 2; x < w; x += step) {
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      return c;
+    }
+    this.sky = sheet(HW.paper, "#d9d6cf", 8, 0.35);
+    this.grain = sheet(null, "#2c2b29", 3, 0.35);
+    this.stars = [];
   };
 
   Field.prototype.placeTank = function (x, color, dim, angle) {
@@ -446,6 +578,7 @@
         L.grid[i] = 0;
         L.px32[i] = 0;
         L.dirty = true;
+        if (this.modern) this.modernCell(i);
         this.holes.push(i);
         // Some of the letter falls as rubble; the rest is vaporised.
         if (this.debris.length < 1400 && c !== 5 && Math.random() < 0.45) {
@@ -587,6 +720,7 @@
       L.grid[i] = L.orig[i];
       L.px32[i] = INK32[L.grid[i]];
       L.dirty = true;
+      if (this.modern) this.modernCell(i);
       if (Math.random() < 0.12) this.sparks.push({ x: L.x + (i % L.w), y: L.y + Math.floor(i / L.w), t: 0 });
     }
     if (!this.holes.length || Math.random() < 0.1) this.updateHud();
@@ -628,6 +762,10 @@
   };
 
   Field.prototype.draw = function () {
+    if (this.modern) {
+      this.drawModern();
+      return;
+    }
     const ctx = this.ctx;
     const w = this.w;
     const h = this.h;
@@ -739,6 +877,186 @@
     }
   };
 
+  /** A light 7-tap blur of a heightmap, for drawing only: crater edges read as curves. */
+  function smoothed(height, x) {
+    const n = height.length;
+    const taps = [1, 2, 3, 4, 3, 2, 1];
+    let y = 0;
+    for (let t = 0; t < taps.length; t++) y += height[clamp(x + t - 3, 0, n - 1)] * taps[t];
+    return y / 16;
+  }
+
+  function drawModernTank(ctx, t) {
+    const x = t.x;
+    const y = t.y;
+    const col = modern(t.color);
+    ctx.fillStyle = HW.ink;
+    ctx.beginPath();
+    roundRect(ctx, x - 8, y - 4.4, 16, 4.4, 2.2);
+    ctx.fill();
+    ctx.fillStyle = t.flash > 0 ? HW.paper : col;
+    ctx.strokeStyle = HW.ink;
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    roundRect(ctx, x - 6.5, y - 8.2, 13, 4.2, 1.2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y - 8, 3.4, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    const rad = (t.angle * Math.PI) / 180;
+    ctx.strokeStyle = HW.ink;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = "butt";
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(rad) * 3, y - 8 - Math.sin(rad) * 3);
+    ctx.lineTo(x + Math.cos(rad) * 13, y - 8 - Math.sin(rad) * 13);
+    ctx.stroke();
+    ctx.fillStyle = HW.paper;
+    for (let i = -5; i <= 5; i += 3.3) {
+      ctx.beginPath();
+      ctx.arc(x + i, y - 2.2, 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  Field.prototype.drawModern = function () {
+    const ctx = this.ctx;
+    const w = this.w;
+    const h = this.h;
+    ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(this.sky, 0, 0, w, h);
+    if (this.shake > 0) ctx.translate(rand(-1, 1) * this.shake, rand(-1, 1) * this.shake);
+
+    // Wind: three short dashes drifting the way it blows.
+    const dir = this.wind < 0 ? -1 : 1;
+    ctx.strokeStyle = HW.ink;
+    ctx.lineWidth = 0.6;
+    ctx.globalAlpha = 0.35;
+    for (let i = 0; i < 4; i++) {
+      const span = w + 40;
+      const travel = (((this.time * 35 * (Math.abs(this.wind) / 5 + 0.4) + i * (w / 3.2)) % span) + span) % span;
+      const x = dir > 0 ? travel - 20 : w + 20 - travel;
+      const y = this.top + 10 + i * h * 0.12;
+      for (let d = 0; d < 3; d++) {
+        const x0 = x - dir * d * 4;
+        ctx.beginPath();
+        ctx.moveTo(x0, y);
+        ctx.lineTo(x0 - dir * 2.2, y);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    const L = this.logo;
+    ctx.drawImage(L.dots, L.x, L.y, L.w, L.h);
+
+    // Hills: solid charcoal with a fine dot grain.
+    const hill = new Path2D();
+    hill.moveTo(0, h);
+    for (let x = 0; x < w; x++) hill.lineTo(x + 0.5, smoothed(this.ground, x));
+    hill.lineTo(w, h);
+    hill.closePath();
+    ctx.fillStyle = "#1c1c1a";
+    ctx.fill(hill);
+    ctx.save();
+    ctx.clip(hill);
+    ctx.drawImage(this.grain, 0, 0, w, h);
+    ctx.restore();
+
+    drawModernTank(ctx, this.you);
+    drawModernTank(ctx, this.cpu);
+
+    if (this.aim && !this.shells.some((p) => p.owner === this.you)) {
+      const v = this.solve(this.you, this.aim.x, this.aim.y);
+      const rad = (v.angle * Math.PI) / 180;
+      let x = this.you.x + Math.cos(rad) * 13;
+      let y = this.you.y - 8 - Math.sin(rad) * 13;
+      let vx = v.vx;
+      let vy = v.vy;
+      ctx.fillStyle = HW.ink;
+      for (let i = 0; i < 9; i++) {
+        vx += v.ax * 0.03;
+        vy += this.gravity * 0.03;
+        x += vx * 0.03;
+        y += vy * 0.03;
+        ctx.globalAlpha = 0.7 - i * 0.06;
+        ctx.beginPath();
+        ctx.arc(x, y, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    for (let i = 0; i < this.shells.length; i++) {
+      const p = this.shells[i];
+      ctx.fillStyle = HW.ink;
+      for (let k = 0; k < p.trail.length; k += 6) {
+        ctx.globalAlpha = (k / p.trail.length) * 0.8;
+        ctx.beginPath();
+        ctx.arc(p.trail[k], p.trail[k + 1], 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = HW.signal;
+      ctx.strokeStyle = HW.ink;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Blasts: an orange flash, then rings spreading out.
+    for (let i = 0; i < this.blasts.length; i++) {
+      const b = this.blasts[i];
+      const k = b.t / b.life;
+      const rr = b.r * (0.5 + 0.8 * k);
+      if (k < 0.45) {
+        ctx.globalAlpha = 1 - k / 0.45;
+        ctx.fillStyle = HW.signal;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, rr * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1 - k;
+      ctx.strokeStyle = HW.ink;
+      ctx.lineWidth = 0.7;
+      for (let ring = 0; ring < 3; ring++) {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, rr * (1 - ring * 0.28), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    for (let i = 0; i < this.debris.length; i++) {
+      const d = this.debris[i];
+      ctx.globalAlpha = d.rest ? Math.max(0, 1 - (d.t - d.life * 0.6) / (d.life * 0.4)) : 1;
+      ctx.fillStyle = modern(d.c);
+      ctx.fillRect(d.x - 0.45, d.y - 0.45, 0.9, 0.9);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = HW.signal;
+    for (let i = 0; i < this.sparks.length; i++) {
+      const s = this.sparks[i];
+      ctx.globalAlpha = 1 - s.t / 0.35;
+      ctx.beginPath();
+      ctx.arc(s.x + 0.5, s.y + 0.5, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  /** Flip between the 1990 and 2026 looks: a fresh hill drawn the new way. */
+  Field.prototype.setEra = function () {
+    this.layout();
+    this.draw();
+  };
+
   Field.prototype.start = function () {
     if (this.running || !this.visible) return;
     this.running = true;
@@ -771,6 +1089,11 @@
     const field = new Field(canvas, hud);
     field.draw();
     field.start();
+    if (window.TankEra) {
+      window.TankEra.onChange(function () {
+        field.setEra();
+      });
+    }
 
     canvas.addEventListener("pointermove", function (e) {
       field.aim = field.toField(e);
@@ -913,11 +1236,19 @@
   // Terminal: types itself out when it scrolls into view
   // ---------------------------------------------------------------------------
   function setupTerminal() {
-    const body = document.querySelector(".term-body");
-    if (!body || reduceMotion || !("IntersectionObserver" in window)) return;
+    if (reduceMotion || !("IntersectionObserver" in window)) return;
+    const bodies = document.querySelectorAll(".term-body");
+    for (let i = 0; i < bodies.length; i++) typeOut(bodies[i]);
+  }
+
+  /** Types the first line, then reveals the rest, once the terminal is in view. */
+  function typeOut(body) {
     const lines = body.querySelectorAll(".t-line");
     const first = lines[0];
     const command = first.textContent;
+    // Everything up to the prompt (C:\TANKWARS> or ~/tankwars $) appears at once.
+    const m = /^.*?[>$] ?/.exec(command);
+    const prompt = m ? m[0].length : 0;
     for (let i = 0; i < lines.length; i++) lines[i].classList.add("hide");
     const pauses = [0, 380, 520, 640, 560, 700, 900, 820, 520];
     function reveal(i) {
@@ -931,7 +1262,6 @@
       first.textContent = "";
       first.classList.remove("hide");
       let n = 0;
-      const prompt = command.indexOf(">") + 2;
       (function next() {
         n = n === 0 ? prompt : n + 1;
         first.textContent = command.slice(0, n);
@@ -939,6 +1269,7 @@
         else reveal(1);
       })();
     }
+    // A hidden era's terminal has no box, so it never intersects until its era is on.
     const io = new IntersectionObserver(
       function (entries) {
         if (!entries[0].isIntersecting) return;
@@ -973,38 +1304,34 @@
     }
   }
 
+  const CHART_W = 640;
+  const CHART_H = 150;
+  const CHART_SURFACE = 72;
+  const CHART_STARS = [[30, 12], [96, 30], [170, 9], [212, 40], [300, 18], [388, 8], [520, 26], [612, 14], [560, 44], [350, 50]];
+
   function drawBlastChart(canvas, focus, blinkOn) {
+    if (isModern()) {
+      drawModernBlastChart(canvas, focus, blinkOn);
+      return;
+    }
+    if (canvas.width !== CHART_W) {
+      canvas.width = CHART_W;
+      canvas.height = CHART_H;
+    }
     const ctx = canvas.getContext("2d");
-    const W = canvas.width;
-    const H = canvas.height;
-    const surface = 72;
+    const W = CHART_W;
+    const H = CHART_H;
+    const surface = CHART_SURFACE;
     for (let y = 0; y < H; y++) {
       const t = Math.min(1, y / surface);
       ctx.fillStyle = "rgb(0,0," + Math.round((0x55 + (0xaa - 0x55) * t) / 17) * 17 + ")";
       ctx.fillRect(0, y, W, 1);
     }
     ctx.fillStyle = VGA.gray;
-    const stars = [[30, 12], [96, 30], [170, 9], [212, 40], [300, 18], [388, 8], [520, 26], [612, 14], [560, 44], [350, 50]];
+    const stars = CHART_STARS;
     for (let i = 0; i < stars.length; i++) ctx.fillRect(stars[i][0], stars[i][1], 1, 1);
 
-    const height = new Float32Array(W);
-    for (let x = 0; x < W; x++) height[x] = surface + Math.sin(x * 0.05) * 1.5;
-    for (let i = 0; i < CRATERS.length; i++) {
-      const c = CRATERS[i];
-      if (c.mound) {
-        for (let x = Math.floor(c.x - c.r); x <= Math.ceil(c.x + c.r); x++) {
-          const t = Math.cos(Math.min(1, Math.abs((x - c.x) / c.r)) * Math.PI * 0.5);
-          height[x] -= 30 * t;
-        }
-      } else if (c.spread) {
-        for (let k = -1; k <= 1; k++) excavate(height, c.x + k * c.spread, height[c.x + k * c.spread], c.r);
-      } else if (c.dig) {
-        for (let d = 0; d < c.dig; d += 3) excavate(height, c.x - 6 + d * 0.3, surface + d, 5);
-        excavate(height, c.x + 3, surface + c.dig, c.r);
-      } else {
-        excavate(height, c.x, height[c.x], c.r);
-      }
-    }
+    const height = chartHeights();
     for (let x = 0; x < W; x++) {
       const top = height[x] | 0;
       const speck = (x * 17 + top * 3) & 7;
@@ -1039,6 +1366,88 @@
     }
   }
 
+  /** 2026: a spec-sheet drawing. Charcoal ground on dot-grid paper, mono labels. */
+  function drawModernBlastChart(canvas, focus, blinkOn) {
+    if (canvas.width !== CHART_W * 2) {
+      canvas.width = CHART_W * 2;
+      canvas.height = CHART_H * 2;
+    }
+    const ctx = canvas.getContext("2d");
+    const W = CHART_W;
+    const H = CHART_H;
+    const surface = CHART_SURFACE;
+    ctx.setTransform(2, 0, 0, 2, 0, 0);
+    ctx.fillStyle = HW.paper;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#d9d6cf";
+    for (let y = 4; y < H; y += 8) {
+      for (let x = 4; x < W; x += 8) {
+        ctx.beginPath();
+        ctx.arc(x, y, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    const height = chartHeights();
+    const ground = new Path2D();
+    ground.moveTo(0, H);
+    for (let x = 0; x < W; x++) ground.lineTo(x + 0.5, smoothed(height, x));
+    ground.lineTo(W, H);
+    ground.closePath();
+    ctx.fillStyle = "#1c1c1a";
+    ctx.fill(ground);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    for (let i = 0; i < CRATERS.length; i++) {
+      const c = CRATERS[i];
+      const on = focus === i;
+      if (on) {
+        const span = c.spread ? c.spread + c.r + 4 : c.r + 5;
+        ctx.strokeStyle = HW.signal;
+        ctx.globalAlpha = blinkOn ? 1 : 0.35;
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(c.x, surface + (c.mound ? -10 : 0), span, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+      ctx.font = "600 11px " + MODERN_FONT;
+      ctx.fillStyle = on ? HW.signal : HW.paper;
+      ctx.fillText(c.label, c.x, H - 20);
+      ctx.font = "400 10px " + MODERN_FONT;
+      ctx.fillStyle = on ? HW.signal : "#9a968e";
+      ctx.fillText(c.mound ? "+mound" : c.spread ? "3 × r" + c.r : "r" + c.r, c.x, H - 7);
+    }
+  }
+
+  /** The chart's ground after every weapon has left its mark. */
+  function chartHeights() {
+    const W = CHART_W;
+    const surface = CHART_SURFACE;
+    const height = new Float32Array(W);
+    for (let x = 0; x < W; x++) height[x] = surface + Math.sin(x * 0.05) * 1.5;
+    for (let i = 0; i < CRATERS.length; i++) {
+      const c = CRATERS[i];
+      if (c.mound) {
+        for (let x = Math.floor(c.x - c.r); x <= Math.ceil(c.x + c.r); x++) {
+          const t = Math.cos(Math.min(1, Math.abs((x - c.x) / c.r)) * Math.PI * 0.5);
+          height[x] -= 30 * t;
+        }
+      } else if (c.spread) {
+        for (let k = -1; k <= 1; k++) excavate(height, c.x + k * c.spread, height[c.x + k * c.spread], c.r);
+      } else if (c.dig) {
+        for (let d = 0; d < c.dig; d += 3) excavate(height, c.x - 6 + d * 0.3, surface + d, 5);
+        excavate(height, c.x + 3, surface + c.dig, c.r);
+      } else {
+        excavate(height, c.x, height[c.x], c.r);
+      }
+    }
+    return height;
+  }
+
   function setupArsenal() {
     const canvas = document.querySelector(".blast-canvas");
     if (!canvas || !canvas.getContext) return;
@@ -1050,6 +1459,13 @@
     }
     paint();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(paint);
+    if (window.TankEra) {
+      window.TankEra.onChange(function () {
+        paint();
+        // The 2026 labels are in IBM Plex Mono, which may only now be loading.
+        if (document.fonts && document.fonts.load) document.fonts.load("600 11px " + MODERN_FONT).then(paint);
+      });
+    }
     const rows = document.querySelectorAll(".price li[data-blast]");
     for (let i = 0; i < rows.length; i++) {
       rows[i].addEventListener("mouseenter", function () {

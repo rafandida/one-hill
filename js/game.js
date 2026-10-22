@@ -8,9 +8,13 @@
   "use strict";
 
   // ---------------------------------------------------------------------------
-  // VGA 16-color palette & constants
+  // Palettes & constants. 1990 is the VGA 16. 2026 (js/era.js) maps the same
+  // sixteen names onto an industrial palette: warm paper, black ink, signal
+  // orange. Everything reads its colors from C, so swapping C's values
+  // re-skins the game. Both palettes keep all sixteen values distinct, so a
+  // stored color can always be traced back to its name.
   // ---------------------------------------------------------------------------
-  const C = {
+  const VGA = {
     black: "#000000",
     blue: "#0000AA",
     green: "#00AA00",
@@ -28,6 +32,58 @@
     yellow: "#FFFF55",
     white: "#FFFFFF",
   };
+  // On paper, "white" (the 1990 text color) has to be ink and "yellow" (the
+  // 1990 highlight) becomes the signal orange.
+  const PALETTE_2026 = {
+    black: "#111111",
+    blue: "#2a3f9e",
+    green: "#00875a",
+    cyan: "#c9d4ff",
+    red: "#b8260f",
+    magenta: "#8f2d7a",
+    brown: "#8a6a3b",
+    gray: "#5f5c56",
+    dgray: "#a8a49c",
+    lblue: "#3a64ff",
+    lgreen: "#00a36c",
+    lcyan: "#1f4fff",
+    lred: "#e8380d",
+    lmag: "#d6246e",
+    yellow: "#ff4f00",
+    white: "#141414",
+  };
+  const PAPER = "#f4f3ef";
+  const HOUSING = "#d6d3cb";
+  const CHARCOAL = "#1c1c1a";
+  const C = Object.assign({}, VGA);
+  // Palette name for any color either era uses, so stored colors can follow a switch.
+  const PALETTE_KEY = Object.create(null);
+  for (const k in VGA) {
+    PALETTE_KEY[VGA[k].toLowerCase()] = k;
+    PALETTE_KEY[PALETTE_2026[k].toLowerCase()] = k;
+  }
+  let MODERN = false;
+
+  /** A color from either palette, in the current one. Other colors pass through. */
+  function tint(color) {
+    const k = PALETTE_KEY[String(color).toLowerCase()];
+    return k ? C[k] : color;
+  }
+
+  const RETRO_FONT = '"Courier New", Courier, monospace';
+  const MONO_FONT = '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace';
+  const DOT_FONT = 'Doto, "IBM Plex Mono", ui-monospace, monospace';
+
+  /**
+   * Canvas font for the current era. 2026 sets headlines in dot-matrix Doto and
+   * everything else in IBM Plex Mono, which is as wide as Courier, so every
+   * layout measured for 1990 still fits.
+   */
+  function font(px, bold) {
+    if (MODERN && bold && px >= 20) return "800 " + Math.round(px * 1.1) + "px " + DOT_FONT;
+    if (MODERN) return (bold ? "600 " : "400 ") + px + "px " + MONO_FONT;
+    return (bold ? "bold " : "") + px + "px " + RETRO_FONT;
+  }
 
   const W = 640;
   const H = 400;
@@ -43,8 +99,17 @@
   const MAX_HP = 80;
   const CREW_MAX = 8;
 
-  const PLAYER_COLORS = [C.lcyan, C.lmag, C.yellow, C.lgreen];
-  const PLAYER_DIM = [C.cyan, C.magenta, C.brown, C.green];
+  // Tank colors: 1990 cyan, magenta, yellow, green; 2026 orange, blue, pink, green.
+  const PLAYER_KEYS = ["lcyan", "lmag", "yellow", "lgreen"];
+  const PLAYER_DIM_KEYS = ["cyan", "magenta", "brown", "green"];
+  const PLAYER_KEYS_2026 = ["yellow", "lcyan", "lmag", "lgreen"];
+  const PLAYER_DIM_2026 = ["#b33800", "#1538b3", "#9e1762", "#00734c"];
+  const PLAYER_COLORS = PLAYER_KEYS.map(function (k) {
+    return C[k];
+  });
+  const PLAYER_DIM = PLAYER_DIM_KEYS.map(function (k) {
+    return C[k];
+  });
   const DIFF_NAMES = ["ROOKIE", "LOBBER", "WINDMASTER"];
   const DIFF_LABELS = ["EASY", "NORMAL", "HARD"];
   const CPU_CALLSIGNS = ["VIPER", "HAMMER", "BRUTUS"];
@@ -94,7 +159,7 @@
       id: "nuke",
       name: "NUKE",
       short: "NUKE",
-      blurb: "NUKE — huge blast. Buy one, or catch a crate.",
+      blurb: "NUKE — huge blast. Buy one, or shoot a crate.",
       key: "5",
       ammo: 0,
       radius: 46,
@@ -131,6 +196,9 @@
   const MAPS = ["canyon", "mesa", "water"];
   const MAP_LABEL = { canyon: "CANYON", mesa: "MESA", water: "WATER GAP" };
   const WINS_TO_TAKE = 3;
+  // Fire presses this soon after a turn opens are dropped, so mashing Space to
+  // skip a CPU shot doesn't also fire yours.
+  const FIRE_LOCK = 0.35;
 
   const CRATE_KINDS = ["bomb", "bomb", "mirv", "digger", "dirt", "nuke"];
 
@@ -298,8 +366,15 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Retro SFX — oscillators + noise, no audio files
+  // SFX — oscillators + noise, no audio files. 1990 beeps in square and
+  // sawtooth; 2026 uses rounder sine and triangle tones with a short echo.
   // ---------------------------------------------------------------------------
+  function byEra(retro, neo) {
+    return function () {
+      return (MODERN ? neo : retro).apply(this, arguments);
+    };
+  }
+
   const Sfx = {
     ctx: null,
     muted: false,
@@ -316,12 +391,32 @@
         this.master = this.ctx.createGain();
         this.master.gain.value = 0.9;
         this.master.connect(this.ctx.destination);
+        // 2026's echo: a short feedback delay, darkened a little each repeat.
+        const delay = this.ctx.createDelay(0.5);
+        delay.delayTime.value = 0.16;
+        const tone = this.ctx.createBiquadFilter();
+        tone.type = "lowpass";
+        tone.frequency.value = 2200;
+        const feedback = this.ctx.createGain();
+        feedback.gain.value = 0.28;
+        this.echo = this.ctx.createGain();
+        this.echo.gain.value = 0.22;
+        this.echo.connect(delay);
+        delay.connect(tone);
+        tone.connect(feedback);
+        feedback.connect(delay);
+        tone.connect(this.master);
       }
       if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
     },
 
     out: function () {
       return this.master || this.ctx.destination;
+    },
+
+    send: function (node) {
+      node.connect(this.out());
+      if (MODERN && this.echo) node.connect(this.echo);
     },
 
     beep: function (freq, dur, type, vol) {
@@ -334,7 +429,7 @@
       g.gain.setValueAtTime(vol || 0.05, t);
       g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
       o.connect(g);
-      g.connect(this.out());
+      this.send(g);
       o.start(t);
       o.stop(t + dur);
     },
@@ -350,7 +445,7 @@
       g.gain.setValueAtTime(vol || 0.05, t);
       g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
       o.connect(g);
-      g.connect(this.out());
+      this.send(g);
       o.start(t);
       o.stop(t + dur);
     },
@@ -373,68 +468,131 @@
       g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
       src.connect(filter);
       filter.connect(g);
-      g.connect(this.out());
+      this.send(g);
       src.start(t);
       src.stop(t + dur);
     },
 
-    notes: function (freqs, step, dur, vol) {
+    notes: function (freqs, step, dur, vol, type) {
       for (let i = 0; i < freqs.length; i++) {
         const f = freqs[i];
-        setTimeout(() => this.beep(f, dur, "square", vol || 0.045), i * step);
+        setTimeout(() => this.beep(f, dur, type || "square", vol || 0.045), i * step);
       }
     },
 
-    fire: function () {
-      this.slide(220, 70, 0.16, "square", 0.07);
-      this.noise(0.1, 0.08, 1400);
-    },
-    explode: function (big) {
-      this.noise(big ? 0.42 : 0.22, big ? 0.2 : 0.12, big ? 700 : 1100);
-      this.slide(big ? 140 : 180, 40, big ? 0.35 : 0.18, "sawtooth", big ? 0.06 : 0.04);
-    },
-    hit: function () {
-      this.beep(310, 0.07, "square", 0.05);
-      this.noise(0.08, 0.07, 1600);
-    },
-    death: function () {
-      this.slide(260, 55, 0.5, "sawtooth", 0.07);
-      this.noise(0.45, 0.16, 800);
-      this.beep(80, 0.25, "square", 0.04);
-    },
-    ui: function () {
-      this.beep(740, 0.045, "square", 0.03);
-    },
+    fire: byEra(
+      function () {
+        this.slide(220, 70, 0.16, "square", 0.07);
+        this.noise(0.1, 0.08, 1400);
+      },
+      function () {
+        this.slide(190, 58, 0.2, "triangle", 0.1);
+        this.noise(0.14, 0.06, 900);
+      }
+    ),
+    explode: byEra(
+      function (big) {
+        this.noise(big ? 0.42 : 0.22, big ? 0.2 : 0.12, big ? 700 : 1100);
+        this.slide(big ? 140 : 180, 40, big ? 0.35 : 0.18, "sawtooth", big ? 0.06 : 0.04);
+      },
+      function (big) {
+        this.slide(big ? 95 : 120, 28, big ? 0.6 : 0.34, "sine", big ? 0.22 : 0.14);
+        this.noise(big ? 0.6 : 0.32, big ? 0.16 : 0.1, big ? 520 : 760);
+        this.slide(1400, 380, 0.22, "sine", 0.015);
+      }
+    ),
+    hit: byEra(
+      function () {
+        this.beep(310, 0.07, "square", 0.05);
+        this.noise(0.08, 0.07, 1600);
+      },
+      function () {
+        this.beep(520, 0.09, "sine", 0.05);
+        this.noise(0.08, 0.05, 1800);
+      }
+    ),
+    death: byEra(
+      function () {
+        this.slide(260, 55, 0.5, "sawtooth", 0.07);
+        this.noise(0.45, 0.16, 800);
+        this.beep(80, 0.25, "square", 0.04);
+      },
+      function () {
+        this.slide(300, 45, 0.7, "triangle", 0.09);
+        this.noise(0.6, 0.14, 600);
+        this.slide(90, 30, 0.5, "sine", 0.12);
+      }
+    ),
+    ui: byEra(
+      function () {
+        this.beep(740, 0.045, "square", 0.03);
+      },
+      function () {
+        this.beep(1046, 0.06, "sine", 0.035);
+      }
+    ),
     tick: function () {
       if (this.muted || !this.ctx) return;
       const now = this.ctx.currentTime;
       if (now - this.lastTick < 0.034) return;
       this.lastTick = now;
-      this.beep(980, 0.025, "square", 0.018);
+      if (MODERN) this.beep(1568, 0.02, "sine", 0.012);
+      else this.beep(980, 0.025, "square", 0.018);
     },
-    pickup: function () {
-      this.notes([523, 784, 1046], 55, 0.07, 0.04);
-    },
+    pickup: byEra(
+      function () {
+        this.notes([523, 784, 1046], 55, 0.07, 0.04);
+      },
+      function () {
+        this.notes([784, 988, 1318, 1568], 50, 0.12, 0.035, "sine");
+      }
+    ),
     whoosh: function (strength) {
       const s = Math.min(1, Math.abs(strength) / 12);
       this.noise(0.28, 0.03 + s * 0.05, 400 + s * 500);
     },
-    win: function () {
-      this.notes([523, 659, 784, 1046], 110, 0.14, 0.05);
-    },
-    lose: function () {
-      this.notes([392, 330, 262, 196], 160, 0.18, 0.05);
-    },
-    fall: function () {
-      this.slide(240, 110, 0.1, "square", 0.03);
-    },
-    splash: function () {
-      this.noise(0.16, 0.08, 900);
-      this.slide(500, 180, 0.12, "sine", 0.03);
-    },
-    deny: function () {
-      this.beep(180, 0.06, "square", 0.03);
-    },
+    win: byEra(
+      function () {
+        this.notes([523, 659, 784, 1046], 110, 0.14, 0.05);
+      },
+      function () {
+        this.notes([523, 659, 784, 1046, 1318], 95, 0.28, 0.045, "triangle");
+      }
+    ),
+    lose: byEra(
+      function () {
+        this.notes([392, 330, 262, 196], 160, 0.18, 0.05);
+      },
+      function () {
+        this.notes([440, 349, 294, 220], 150, 0.32, 0.045, "triangle");
+      }
+    ),
+    fall: byEra(
+      function () {
+        this.slide(240, 110, 0.1, "square", 0.03);
+      },
+      function () {
+        this.slide(300, 120, 0.12, "sine", 0.03);
+      }
+    ),
+    splash: byEra(
+      function () {
+        this.noise(0.16, 0.08, 900);
+        this.slide(500, 180, 0.12, "sine", 0.03);
+      },
+      function () {
+        this.noise(0.22, 0.08, 1200);
+        this.slide(700, 200, 0.16, "sine", 0.035);
+      }
+    ),
+    deny: byEra(
+      function () {
+        this.beep(180, 0.06, "square", 0.03);
+      },
+      function () {
+        this.beep(220, 0.09, "triangle", 0.035);
+      }
+    ),
   };
 
   // ---------------------------------------------------------------------------
@@ -459,6 +617,10 @@
     ) {
       e.preventDefault();
     }
+    // Holding Space or Enter is one press, not a stream of shots.
+    if (e.repeat && (k === " " || k === "Spacebar" || k === "Enter")) return;
+    // Esc in full screen is the browser's; the game shouldn't also quit the series.
+    if ((k === "Escape" || k === "Esc") && document.fullscreenElement) return;
     keys[k] = true;
     if (k.length === 1) keys[k.toLowerCase()] = true;
     taps.push(k);
@@ -671,6 +833,12 @@
       }
     }
     if (punched) addShake(game, r > 20 ? 8 : 5);
+    // Tanks never drive, so a crate is claimed by shooting it: one caught in
+    // the blast goes to whoever fired.
+    for (let i = game.crates.length - 1; i >= 0; i--) {
+      const c = game.crates[i];
+      if (Math.hypot(c.x - cx, c.y - 2 - cy) < r + 6) claimCrate(game, i, owner);
+    }
     game.explosions.push({
       x: cx,
       y: cy,
@@ -806,22 +974,35 @@
         const tank = game.tanks[t];
         if (!tank.alive) continue;
         if (Math.abs(tank.x - c.x) < 14 && Math.abs(tank.y - c.y) < 16) {
-          grantLoot(tank, c.kind);
-          burst(game, c.x, c.y, 10, {
-            colors: [C.yellow, C.white, C.lgreen],
-            spd: 60,
-            up: 40,
-            g: false,
-            life: 0.3,
-          });
-          Sfx.pickup();
-          game.banner = tank.name + "  +" + c.kind.toUpperCase();
-          game.bannerT = 0.9;
-          game.crates.splice(i, 1);
+          claimCrate(game, i, tank);
           break;
         }
       }
     }
+  }
+
+  /** Crate i's rounds go to tank. With nobody left to take them, it just bursts. */
+  function claimCrate(game, i, tank) {
+    const c = game.crates[i];
+    game.crates.splice(i, 1);
+    burst(game, c.x, c.y, 10, {
+      colors: [C.yellow, C.white, C.lgreen],
+      spd: 60,
+      up: 40,
+      g: false,
+      life: 0.3,
+    });
+    if (!tank || !tank.alive) return;
+    grantLoot(tank, c.kind);
+    // The banner gives way to the next turn's almost at once; the callout stays.
+    callout(game, c.x, c.y - 14, "+" + c.kind.toUpperCase(), C.lgreen);
+    Sfx.pickup();
+    game.banner = tank.name + "  +" + c.kind.toUpperCase();
+    game.bannerT = 0.9;
+  }
+
+  function crateHit(c, x, y) {
+    return Math.abs(x - c.x) <= 6 && y >= c.y - 7 && y <= c.y + 2;
   }
 
   function stepShots(game, dt) {
@@ -889,6 +1070,13 @@
               p.dead = true;
               break;
             }
+          }
+          for (let k = game.crates.length - 1; k >= 0 && !p.dead; k--) {
+            if (!crateHit(game.crates[k], p.x, p.y)) continue;
+            claimCrate(game, k, p.owner);
+            if (p.weapon.kind === "mound") applyMound(game, p.x, p.y, p.weapon);
+            else applyBlast(game, p.x, p.y, p.weapon, p.owner);
+            p.dead = true;
           }
           if (p.dead) break;
         }
@@ -1040,6 +1228,10 @@
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.ctx.imageSmoothingEnabled = false;
+    // Backing pixels per game pixel: 1 in 1990 (the browser scales it up
+    // blocky), more in 2026 so the smooth shapes stay sharp.
+    this.scale = 1;
+    this.paperSky = null;
 
     this.mode = "title";
     this.playMode = "cpu";
@@ -1095,6 +1287,7 @@
     this.joinError = "";
     this.turnSeq = 0;
     this.clock = 0;
+    this.fireLock = 0;
     this.waitT = 0;
     this.shopReady = false;
     this.demo = false;
@@ -1510,6 +1703,9 @@
     this.turnNumber++;
     this.turnSeq++;
     this.announceTurn();
+    // Keys pressed while the last shell flew don't carry into this turn.
+    flushTaps();
+    this.fireLock = FIRE_LOCK;
     if (!cur.human) {
       const plan = aiChoose(this, cur);
       this.ai = {
@@ -1719,7 +1915,7 @@
         Sfx.ui();
       }
     }
-    if (consume(" ") || consume("Spacebar") || consume("Enter")) this.tryFire();
+    if ((consume(" ") || consume("Spacebar") || consume("Enter")) && this.fireLock <= 0) this.tryFire();
   };
 
   Game.prototype.nudgeTitle = function (dir) {
@@ -1748,6 +1944,10 @@
   };
 
   Game.prototype.handleTitleInput = function () {
+    if (consume("Escape") || consume("Esc")) {
+      location.href = "./";
+      return;
+    }
     if (consume("ArrowLeft") || consume("a") || consume("A")) this.nudgeTitle(-1);
     if (consume("ArrowRight") || consume("d") || consume("D")) this.nudgeTitle(1);
     if (consume("ArrowUp") || consume("w") || consume("W")) {
@@ -1943,6 +2143,7 @@
 
     if (this.mode === "aim") {
       this.settleTanks(dt);
+      if (this.fireLock > 0) this.fireLock -= dt;
       if (this.net && this.netClock(dt)) return;
       const guest = this.isGuest();
       if (this.ai) {
@@ -2556,6 +2757,7 @@
     this.mode = "aim";
     if (cur.human) Sfx.ui();
     flushTaps();
+    this.fireLock = FIRE_LOCK;
   };
 
   Game.prototype.applyVictory = function (s) {
@@ -2565,7 +2767,14 @@
     for (let i = 0; i < this.tanks.length; i++) {
       if (this.tanks[i].id === s.winner) this.winner = this.tanks[i];
     }
-    this.roundLines = s.lines || [];
+    // The host may be in the other era: color each line by its tank, not the host's palette.
+    const roster = this.roster;
+    this.roundLines = (s.lines || []).map(function (l) {
+      const r = roster.find(function (x) {
+        return x.name === l.name;
+      });
+      return { name: l.name, text: l.text, color: r ? r.color : tint(l.color) };
+    });
     this.seriesOver = s.seriesOver;
     this.round = s.round;
     this.roundScored = true;
@@ -2754,7 +2963,311 @@
   // ---------------------------------------------------------------------------
   // Drawing
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // 2026 rendering: the same field and rules drawn as a piece of hardware.
+  // Dot-grid paper, charcoal hills, flat tanks with black outlines, rings for
+  // blasts, keys that press down. Each draw* method below hands over to its
+  // *Modern twin when MODERN is on.
+  // ---------------------------------------------------------------------------
+  function roundPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else ctx.rect(x, y, w, h);
+  }
+
+  /** Flat paper panel with a black edge and a ledge under it: 2026's text-mode box. */
+  function panel(ctx, x, y, w, h, r) {
+    roundPath(ctx, x, y + 3, w, h, r);
+    ctx.fillStyle = C.black;
+    ctx.fill();
+    roundPath(ctx, x + 0.5, y + 0.5, w - 1, h - 1, r);
+    ctx.fillStyle = PAPER;
+    ctx.fill();
+    ctx.strokeStyle = C.black;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  /** A key. Up keys sit on a 2px ledge; pressed keys drop onto it. Returns the drop. */
+  function key(ctx, x, y, w, h, fill, pressed) {
+    if (!pressed) {
+      roundPath(ctx, x, y + 2, w, h, 4);
+      ctx.fillStyle = C.black;
+      ctx.fill();
+    }
+    const dy = pressed ? 2 : 0;
+    roundPath(ctx, x + 0.5, y + 0.5 + dy, w - 1, h - 1, 4);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = C.black;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    return dy;
+  }
+
+  /** Expanding ink rings with an orange flash at the start: a 2026 blast. */
+  function rings(ctx, x, y, r, k, heavy) {
+    const rr = r * (0.5 + 0.8 * k);
+    if (k < 0.45) {
+      ctx.globalAlpha = 1 - k / 0.45;
+      ctx.fillStyle = C.yellow;
+      ctx.beginPath();
+      ctx.arc(x, y, rr * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    ctx.strokeStyle = C.black;
+    ctx.lineWidth = heavy ? 1.3 : 0.9;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(x, y, rr * (1 - i * 0.28), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** Paper with a dot grid for the sky, and the fine grain printed inside the hills. */
+  Game.prototype.paperBackdrop = function () {
+    const s = this.scale;
+    if (this.paperSky && this.paperSky.s === s) return this.paperSky;
+    function sheet(bg) {
+      const c = document.createElement("canvas");
+      c.width = W * s;
+      c.height = H * s;
+      const ctx = c.getContext("2d");
+      ctx.scale(s, s);
+      if (bg) {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+      }
+      return { c: c, ctx: ctx };
+    }
+    const sky = sheet(PAPER);
+    sky.ctx.fillStyle = "#dcd9d2";
+    for (let y = 4; y < H; y += 8) {
+      for (let x = 4; x < W; x += 8) {
+        sky.ctx.beginPath();
+        sky.ctx.arc(x, y, 0.55, 0, Math.PI * 2);
+        sky.ctx.fill();
+      }
+    }
+    const grain = sheet(null);
+    grain.ctx.fillStyle = "#2f2e2b";
+    for (let y = 1; y < H; y += 3) {
+      for (let x = (y % 2) * 1.5; x < W; x += 3) grain.ctx.fillRect(x, y, 0.8, 0.8);
+    }
+    this.paperSky = { s: s, sky: sky.c, grain: grain.c };
+    return this.paperSky;
+  };
+
+  Game.prototype.drawSkyModern = function (ctx) {
+    ctx.drawImage(this.paperBackdrop().sky, 0, 0, W, H);
+    if (this.wind) {
+      // Three short dashes per streak, drifting the way the wind blows.
+      const dir = this.wind < 0 ? -1 : 1;
+      ctx.strokeStyle = C.black;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.3;
+      for (let i = 0; i < 4; i++) {
+        const wrap = W + 80;
+        const travel = (((this.time * 70 + i * 160) % wrap) + wrap) % wrap;
+        const x = dir < 0 ? W + 40 - travel : travel - 40;
+        const y = PLAY_TOP + 30 + i * 36;
+        const n = 2 + Math.min(3, Math.round(Math.abs(this.wind) / 4));
+        for (let d = 0; d < n; d++) {
+          const x0 = x - dir * d * 7;
+          ctx.beginPath();
+          ctx.moveTo(x0, y);
+          ctx.lineTo(x0 - dir * 4, y);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+  };
+
+  Game.prototype.drawTerrainModern = function (ctx) {
+    const h = this.height;
+    // Drawn from lightly smoothed heights so crater edges read as curves;
+    // shots still hit the raw columns.
+    const ground = new Path2D();
+    const taps = [1, 2, 3, 4, 3, 2, 1];
+    ground.moveTo(0, H);
+    for (let x = 0; x < W; x++) {
+      let y = 0;
+      for (let t = 0; t < taps.length; t++) y += h[clamp(x + t - 3, 0, W - 1)] * taps[t];
+      ground.lineTo(x + 0.5, y / 16);
+    }
+    ground.lineTo(W, H);
+    ground.closePath();
+    ctx.fillStyle = CHARCOAL;
+    ctx.fill(ground);
+    ctx.save();
+    ctx.clip(ground);
+    ctx.drawImage(this.paperBackdrop().grain, 0, 0, W, H);
+    ctx.restore();
+
+    if (this.water) {
+      const wtr = this.water;
+      ctx.fillStyle = C.lcyan;
+      ctx.fillRect(wtr.x0, wtr.y, wtr.x1 - wtr.x0, H - wtr.y);
+      ctx.fillStyle = PAPER;
+      ctx.globalAlpha = 0.22;
+      for (let y = wtr.y + 5; y < H; y += 5) ctx.fillRect(wtr.x0, y, wtr.x1 - wtr.x0, 1);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = PAPER;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = wtr.x0; x <= wtr.x1; x += 2) {
+        const y = wtr.y + 1 + Math.sin(x * 0.15 + this.time * 3) * 0.8;
+        if (x === wtr.x0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  };
+
+  function drawTankModern(ctx, tank) {
+    const x = tank.x;
+    const y = tank.y;
+    if (!tank.alive && tank.death > 0 && tank.bits) {
+      for (let i = 0; i < tank.bits.length; i++) {
+        const b = tank.bits[i];
+        ctx.fillStyle = b.c;
+        ctx.fillRect(b.x - 1, b.y - 1, 2, 2);
+      }
+      rings(ctx, x, y - 8, 22, 1.15 - Math.min(1.15, tank.death), true);
+      return;
+    }
+
+    ctx.fillStyle = C.black;
+    roundPath(ctx, x - 8, y - 4.4, 16, 4.4, 2.2);
+    ctx.fill();
+    ctx.fillStyle = tank.alive ? (tank.flash > 0 ? PAPER : tank.color) : C.dgray;
+    ctx.strokeStyle = C.black;
+    ctx.lineWidth = 0.7;
+    roundPath(ctx, x - 6.5, y - 8.2, 13, 4.2, 1.2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y - 8, 3.4, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = PAPER;
+    for (let i = -5; i <= 5; i += 3.3) {
+      ctx.beginPath();
+      ctx.arc(x + i, y - 2.2, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (tank.alive && tank.shields > 0) {
+      ctx.strokeStyle = C.black;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.arc(x, y - 6, 13, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    if (tank.alive) {
+      const rad = (tank.angle * Math.PI) / 180;
+      ctx.strokeStyle = C.black;
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = "butt";
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(rad) * 3, y - 8 - Math.sin(rad) * 3);
+      ctx.lineTo(x + Math.cos(rad) * 13, y - 8 - Math.sin(rad) * 13);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = C.yellow;
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x - 3, y - 16);
+      ctx.lineTo(x + 3, y - 10);
+      ctx.moveTo(x + 3, y - 16);
+      ctx.lineTo(x - 3, y - 10);
+      ctx.stroke();
+    }
+  }
+
+  Game.prototype.drawCratesModern = function (ctx) {
+    for (let i = 0; i < this.crates.length; i++) {
+      const c = this.crates[i];
+      roundPath(ctx, c.x - 5.5, c.y - 6.5, 11, 9, 1.5);
+      ctx.fillStyle = PAPER;
+      ctx.fill();
+      ctx.strokeStyle = C.black;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.strokeStyle = C.yellow;
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "butt";
+      ctx.beginPath();
+      ctx.moveTo(c.x - 2.4, c.y - 2);
+      ctx.lineTo(c.x + 2.4, c.y - 2);
+      ctx.moveTo(c.x, c.y - 4.4);
+      ctx.lineTo(c.x, c.y + 0.4);
+      ctx.stroke();
+      // Status LED on the lid, blinking like the 1990 crate does.
+      if (Math.floor(c.blink * 6) % 2 === 0) {
+        ctx.fillStyle = C.yellow;
+        ctx.beginPath();
+        ctx.arc(c.x + 4, c.y - 9.5, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  };
+
+  Game.prototype.drawShotsModern = function (ctx) {
+    for (let i = 0; i < this.shots.length; i++) {
+      const p = this.shots[i];
+      ctx.fillStyle = C.black;
+      for (let k = 0; k < p.trail.length; k += 6) {
+        ctx.globalAlpha = (k / p.trail.length) * 0.8;
+        ctx.beginPath();
+        ctx.arc(p.trail[k], p.trail[k + 1], 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = p.weapon.kind === "digger" && p.digging ? C.brown : C.yellow;
+      ctx.strokeStyle = C.black;
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  };
+
+  Game.prototype.drawExplosionsModern = function (ctx) {
+    for (let i = 0; i < this.explosions.length; i++) {
+      const e = this.explosions[i];
+      rings(ctx, e.x, e.y, e.r, e.t / e.life, e.big);
+    }
+  };
+
+  // Dirt in 2026 is charcoal, like the hills it came out of.
+  const DUST_2026 = { "#774400": "#2a2927", "#995000": "#3a3835", "#553300": "#1f1e1c" };
+
+  Game.prototype.drawParticlesModern = function (ctx) {
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      ctx.globalAlpha = 1 - p.t / p.life;
+      ctx.fillStyle = DUST_2026[p.c] || tint(p.c);
+      const d = p.sz * 0.8;
+      ctx.fillRect(p.x - d / 2, p.y - d / 2, d, d);
+    }
+    ctx.globalAlpha = 1;
+  };
+
   Game.prototype.drawSky = function (ctx) {
+    if (MODERN) {
+      this.drawSkyModern(ctx);
+      return;
+    }
     const g = ctx.createLinearGradient(0, PLAY_TOP, 0, H);
     g.addColorStop(0, "#000055");
     g.addColorStop(0.45, C.blue);
@@ -2783,6 +3296,10 @@
   };
 
   Game.prototype.drawTerrain = function (ctx) {
+    if (MODERN) {
+      this.drawTerrainModern(ctx);
+      return;
+    }
     const h = this.height;
     for (let x = 0; x < W; x++) {
       const surface = h[x] | 0;
@@ -2812,6 +3329,10 @@
   };
 
   function drawTankSprite(ctx, tank) {
+    if (MODERN) {
+      drawTankModern(ctx, tank);
+      return;
+    }
     const x = Math.round(tank.x);
     const y = Math.round(tank.y);
 
@@ -2879,7 +3400,7 @@
       if (this.net && t.alive && t.id === this.net.seat) {
         const myTurn = this.mode === "aim" && this.current() === t;
         if (myTurn && Math.floor(this.time * 4) % 2) continue;
-        ctx.font = 'bold 9px "Courier New", Courier, monospace';
+        ctx.font = font(9, true);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = t.color;
@@ -2889,6 +3410,10 @@
   };
 
   Game.prototype.drawCrates = function (ctx) {
+    if (MODERN) {
+      this.drawCratesModern(ctx);
+      return;
+    }
     for (let i = 0; i < this.crates.length; i++) {
       const c = this.crates[i];
       const flash = Math.floor(c.blink * 6) % 2 === 0;
@@ -2902,6 +3427,10 @@
   };
 
   Game.prototype.drawShots = function (ctx) {
+    if (MODERN) {
+      this.drawShotsModern(ctx);
+      return;
+    }
     for (let i = 0; i < this.shots.length; i++) {
       const p = this.shots[i];
       ctx.fillStyle = C.dgray;
@@ -2916,6 +3445,10 @@
   };
 
   Game.prototype.drawExplosions = function (ctx) {
+    if (MODERN) {
+      this.drawExplosionsModern(ctx);
+      return;
+    }
     for (let i = 0; i < this.explosions.length; i++) {
       const e = this.explosions[i];
       const k = e.t / e.life;
@@ -2933,6 +3466,10 @@
   };
 
   Game.prototype.drawParticles = function (ctx) {
+    if (MODERN) {
+      this.drawParticlesModern(ctx);
+      return;
+    }
     for (let i = 0; i < this.particles.length; i++) {
       const p = this.particles[i];
       const fade = 1 - p.t / p.life;
@@ -2950,12 +3487,19 @@
   }
 
   Game.prototype.drawHud = function (ctx) {
-    ctx.fillStyle = C.dgray;
-    ctx.fillRect(0, 0, W, HUD);
-    ctx.fillStyle = C.gray;
-    ctx.fillRect(0, HUD - 1, W, 1);
+    if (MODERN) {
+      ctx.fillStyle = PAPER;
+      ctx.fillRect(0, 0, W, HUD);
+      ctx.fillStyle = C.black;
+      ctx.fillRect(0, HUD - 1, W, 1);
+    } else {
+      ctx.fillStyle = C.dgray;
+      ctx.fillRect(0, 0, W, HUD);
+      ctx.fillStyle = C.gray;
+      ctx.fillRect(0, HUD - 1, W, 1);
+    }
 
-    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.font = font(12);
     ctx.textBaseline = "middle";
 
     const tank = this.current();
@@ -2966,7 +3510,7 @@
       ctx.textAlign = "left";
       ctx.fillText("TANK WARS", 8, y);
       ctx.fillStyle = C.gray;
-      ctx.fillText("SHAREWARE TRIBUTE", 120, y);
+      ctx.fillText(MODERN ? "MODEL TW-26" : "SHAREWARE TRIBUTE", 120, y);
       ctx.fillStyle = Sfx.muted ? C.lred : C.lgreen;
       ctx.textAlign = "right";
       ctx.fillText(Sfx.muted ? "MUTE" : "SND", W - 10, y);
@@ -2992,23 +3536,39 @@
     ctx.fillStyle = C.lgreen;
     ctx.fillText("CREW " + crewCount(tank) + "/" + CREW_MAX, 478, y);
 
-    ctx.fillStyle = tank.color;
-    ctx.fillRect(558, 8, Math.round(36 * (tank.hp / MAX_HP)), 12);
-    ctx.strokeStyle = C.white;
-    ctx.strokeRect(558, 8, 36, 12);
+    if (MODERN) {
+      const hp = Math.max(0, 34 * (tank.hp / MAX_HP));
+      ctx.fillStyle = tank.color;
+      ctx.fillRect(559, 9, hp, 10);
+      roundPath(ctx, 558.5, 8.5, 36, 12, 2);
+      ctx.strokeStyle = C.black;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = tank.color;
+      ctx.fillRect(558, 8, Math.round(36 * (tank.hp / MAX_HP)), 12);
+      ctx.strokeStyle = C.white;
+      ctx.strokeRect(558, 8, 36, 12);
+    }
 
     if (Sfx.muted) {
       ctx.fillStyle = C.lred;
-      ctx.font = '10px "Courier New", Courier, monospace';
+      ctx.font = font(10);
       ctx.fillText("M", 600, y);
     }
   };
 
   Game.prototype.drawWeaponBar = function (ctx) {
     if (this.mode === "title" || this.mode === "handoff" || this.mode === "shop") return;
-    ctx.fillStyle = "#111111";
-    ctx.fillRect(0, H - FOOT, W, FOOT);
-    ctx.fillStyle = C.dgray;
+    if (MODERN) {
+      ctx.fillStyle = HOUSING;
+      ctx.fillRect(0, H - FOOT, W, FOOT);
+      ctx.fillStyle = C.black;
+    } else {
+      ctx.fillStyle = "#111111";
+      ctx.fillRect(0, H - FOOT, W, FOOT);
+      ctx.fillStyle = C.dgray;
+    }
     ctx.fillRect(0, H - FOOT, W, 1);
 
     const tank = this.current();
@@ -3020,7 +3580,7 @@
     const bw = Math.floor((W - 8 - gap * (n - 1)) / n);
     const by = H - FOOT + 3;
     const bh = 18;
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     for (let i = 0; i < n; i++) {
@@ -3029,7 +3589,11 @@
       const ammo = w.ammo === Infinity ? "∞" : String(tank.ammo[i]);
       const empty = w.ammo !== Infinity && tank.ammo[i] <= 0;
       const sel = tank.weapon === i;
-      if (sel) {
+      let drop = 0;
+      if (MODERN) {
+        drop = key(ctx, x, by, bw, bh, sel ? tank.color : empty ? "#e4e1db" : PAPER, sel);
+        ctx.fillStyle = empty ? C.dgray : C.black;
+      } else if (sel) {
         ctx.fillStyle = tank.color;
         ctx.fillRect(x, by, bw, bh);
         ctx.fillStyle = C.black;
@@ -3038,12 +3602,12 @@
         ctx.fillRect(x, by, bw, bh);
         ctx.fillStyle = empty ? C.dgray : C.white;
       }
-      ctx.fillText(i + 1 + " " + w.name + " " + ammo, x + bw / 2, by + bh / 2);
+      ctx.fillText(i + 1 + " " + w.name + " " + ammo, x + bw / 2, by + bh / 2 + drop);
       this.weaponBoxes.push({ i: i, x: x, w: bw, y: by, h: bh });
     }
 
     const chosen = WEAPONS[tank.weapon];
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillStyle = tank.color;
@@ -3078,6 +3642,17 @@
     const pts = previewArc(tank, this.wind, this.height, this.water);
     const full = this.previewOn && tank.guidance > 0;
     const limit = full ? pts.length : Math.min(pts.length, 8);
+    if (MODERN) {
+      ctx.fillStyle = full ? C.white : tank.color;
+      for (let i = 0; i < limit; i += 2) {
+        ctx.globalAlpha = full ? 0.5 + (i / pts.length) * 0.5 : 0.6 - (i / limit) * 0.4;
+        ctx.beginPath();
+        ctx.arc(pts[i], pts[i + 1], full ? 1.4 : 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
     for (let i = 0; i < limit; i += 2) {
       ctx.globalAlpha = full ? 0.45 + (i / pts.length) * 0.5 : 0.35;
       ctx.fillStyle = full ? C.white : tank.color;
@@ -3091,11 +3666,28 @@
     const flash = Math.floor(this.time * 8) % 2 === 0;
     const w = 240;
     const h = 28;
+    if (MODERN) {
+      roundPath(ctx, W / 2 - w / 2, PLAY_TOP + 16, w, h, 5);
+      ctx.fillStyle = C.black;
+      ctx.fill();
+      if (flash) {
+        ctx.fillStyle = C.yellow;
+        ctx.beginPath();
+        ctx.arc(W / 2 - w / 2 + 12, PLAY_TOP + 30, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.font = font(13, true);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = PAPER;
+      ctx.fillText(this.banner, W / 2, PLAY_TOP + 30);
+      return;
+    }
     ctx.fillStyle = "rgba(0,0,0,0.62)";
     ctx.fillRect(W / 2 - w / 2, PLAY_TOP + 16, w, h);
     ctx.strokeStyle = flash ? C.yellow : C.white;
     ctx.strokeRect(W / 2 - w / 2 + 2, PLAY_TOP + 18, w - 4, h - 4);
-    ctx.font = 'bold 16px "Courier New", Courier, monospace';
+    ctx.font = font(16, true);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = flash ? C.yellow : C.white;
@@ -3106,6 +3698,10 @@
     if (!this.height) this.height = generateHeightmap(W, Math.random);
     this.drawSky(ctx);
     this.drawTerrain(ctx);
+    if (MODERN) {
+      panel(ctx, 70, 44, 500, 312, 8);
+      return;
+    }
     ctx.fillStyle = "rgba(0,0,0,0.66)";
     ctx.fillRect(70, 44, 500, 312);
     ctx.strokeStyle = C.yellow;
@@ -3117,14 +3713,14 @@
 
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillStyle = C.yellow;
-    ctx.font = 'bold 36px "Courier New", Courier, monospace';
+    ctx.fillStyle = MODERN ? C.black : C.yellow;
+    ctx.font = font(36, true);
     ctx.fillText("TANK WARS", W / 2, 60);
     ctx.fillStyle = C.lcyan;
-    ctx.font = '14px "Courier New", Courier, monospace';
-    ctx.fillText("2.5    a shareware tribute", W / 2, 102);
+    ctx.font = font(14);
+    ctx.fillText(MODERN ? "2026    model TW-26" : "2.5    a shareware tribute", W / 2, 102);
     ctx.fillStyle = C.gray;
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     ctx.fillText("Inspired by Kenny Morse, 1990  ·  original graphics", W / 2, 124);
 
     const modeVal = { cpu: "1P vs CPU", hotseat: "HOTSEAT", online: "ONLINE" }[this.playMode];
@@ -3150,7 +3746,7 @@
     }
     rows.push({ label: "SOUND", value: Sfx.muted ? "OFF" : "ON", hint: "M mutes anytime" });
 
-    ctx.font = '14px "Courier New", Courier, monospace';
+    ctx.font = font(14);
     ctx.textAlign = "left";
     const rowGap = rows.length > 3 ? 24 : 30;
     for (let i = 0; i < rows.length; i++) {
@@ -3165,28 +3761,32 @@
     }
 
     ctx.fillStyle = C.white;
-    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.font = font(12);
     ctx.textAlign = "center";
-    ctx.fillText("← → change    ↑ ↓ select row    ENTER start", W / 2, 258);
+    ctx.fillText("← → change    ↑ ↓ select row    ENTER start    ESC home", W / 2, 258);
     ctx.fillStyle = C.gray;
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     ctx.fillText("Drag to aim. A short arc is free.  A clean hit ends a tank.", W / 2, 278);
     ctx.fillText("A/D angle  W/S power  SPACE fire  1-6 weapons  T arc  M mute", W / 2, 298);
     ctx.fillStyle = C.dgray;
-    ctx.fillText("Kills pay. Shop between hills. Water swallows shells.", W / 2, 322);
+    ctx.fillText("Kills pay. Shoot crates for loot. Water swallows shells.", W / 2, 322);
   };
 
   Game.prototype.drawVictory = function (ctx) {
     const extra = this.seriesOver && !this.demo ? 34 : 0;
     const tall = 168 + this.roundLines.length * 16 + extra;
     const top = Math.max(70, 200 - tall / 2);
-    ctx.fillStyle = "rgba(0,0,0,0.62)";
-    ctx.fillRect(90, top, 460, tall);
-    ctx.strokeStyle = C.yellow;
-    ctx.strokeRect(94, top + 4, 452, tall - 8);
+    if (MODERN) {
+      panel(ctx, 90, top, 460, tall, 8);
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,0.62)";
+      ctx.fillRect(90, top, 460, tall);
+      ctx.strokeStyle = C.yellow;
+      ctx.strokeRect(94, top + 4, 452, tall - 8);
+    }
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = 'bold 26px "Courier New", Courier, monospace';
+    ctx.font = font(26, true);
     const champ = this.seriesOver ? seriesChamp(this.roster) : null;
     if (this.seriesOver && champ) {
       ctx.fillStyle = champ.color;
@@ -3201,14 +3801,14 @@
       ctx.fillStyle = C.gray;
       ctx.fillText("DRAWN HILL", W / 2, top + 32);
     }
-    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.font = font(12);
     let y = top + 58;
     for (let i = 0; i < this.roundLines.length; i++) {
       ctx.fillStyle = this.roundLines[i].color;
       ctx.fillText(this.roundLines[i].name + "  " + this.roundLines[i].text, W / 2, y);
       y += 16;
     }
-    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.font = font(13);
     let score = "SERIES  ";
     for (let i = 0; i < this.roster.length; i++) {
       score += this.roster[i].name + " " + this.roster[i].wins + "   ";
@@ -3218,15 +3818,19 @@
     this.shareBox = null;
     if (extra) {
       const box = { x: W / 2 - 74, y: top + tall - 74, w: 148, h: 24 };
-      ctx.fillStyle = C.lgreen;
-      ctx.fillRect(box.x, box.y, box.w, box.h);
+      if (MODERN) {
+        key(ctx, box.x, box.y, box.w, box.h, C.yellow, false);
+      } else {
+        ctx.fillStyle = C.lgreen;
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+      }
       ctx.fillStyle = C.black;
-      ctx.font = 'bold 13px "Courier New", Courier, monospace';
+      ctx.font = font(13, true);
       ctx.fillText("SHARE RESULT", W / 2, box.y + box.h / 2 + 1);
       this.shareBox = box;
     }
     ctx.fillStyle = C.white;
-    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.font = font(13);
     let keysLine = this.seriesOver ? "ENTER  rematch   S  share   ESC  title" : "ENTER  shop     ESC  title";
     if (this.net && !this.seriesOver) keysLine = "ENTER  shop     ESC  leave";
     else if (this.net && this.net.host) keysLine = "ENTER  rematch   S  share   ESC  close";
@@ -3237,45 +3841,54 @@
 
   Game.prototype.drawHandoff = function (ctx) {
     const tank = this.current();
-    ctx.fillStyle = "#000033";
-    ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = tank ? tank.color : C.yellow;
-    ctx.strokeRect(80, 90, 480, 200);
+    if (MODERN) {
+      ctx.drawImage(this.paperBackdrop().sky, 0, 0, W, H);
+      panel(ctx, 80, 90, 480, 200, 8);
+    } else {
+      ctx.fillStyle = "#000033";
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = tank ? tank.color : C.yellow;
+      ctx.strokeRect(80, 90, 480, 200);
+    }
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = 'bold 28px "Courier New", Courier, monospace';
+    ctx.font = font(28, true);
     ctx.fillStyle = tank ? tank.color : C.white;
     ctx.fillText((tank ? tank.name : "NEXT") + "  —  LOOK AWAY", W / 2, 150);
-    ctx.font = '14px "Courier New", Courier, monospace';
+    ctx.font = font(14);
     ctx.fillStyle = C.yellow;
     ctx.fillText("pass the keyboard", W / 2, 190);
     ctx.fillStyle = C.white;
     ctx.fillText("ENTER when only you can see the screen", W / 2, 230);
     ctx.fillStyle = C.dgray;
-    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.font = font(12);
     ctx.fillText(MAP_LABEL[this.mapKind] + "   round " + this.round, W / 2, 262);
   };
 
   Game.prototype.drawShop = function (ctx) {
     this.drawSky(ctx);
     if (this.height) this.drawTerrain(ctx);
-    ctx.fillStyle = "rgba(0,0,0,0.72)";
-    ctx.fillRect(36, 36, 568, 328);
-    ctx.strokeStyle = C.yellow;
-    ctx.strokeRect(40, 40, 560, 320);
+    if (MODERN) {
+      panel(ctx, 36, 36, 568, 328, 8);
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,0.72)";
+      ctx.fillRect(36, 36, 568, 328);
+      ctx.strokeStyle = C.yellow;
+      ctx.strokeRect(40, 40, 560, 320);
+    }
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillStyle = C.yellow;
-    ctx.font = 'bold 20px "Courier New", Courier, monospace';
+    ctx.font = font(20, true);
     ctx.fillText("SUPPLY  ·  ROUND " + this.round + " CLEARED", 56, 52);
-    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.font = font(12);
     const labels = this.roster.map(function (r) {
       return r.name + " $" + r.cash + "  W" + r.wins;
     });
     const widthAll = labels.reduce(function (s, l) {
       return s + ctx.measureText(l).width + 16;
     }, 0);
-    if (widthAll > 536) ctx.font = '10px "Courier New", Courier, monospace';
+    if (widthAll > 536) ctx.font = font(10);
     let lx = 56;
     for (let i = 0; i < this.roster.length; i++) {
       ctx.fillStyle = this.roster[i].color;
@@ -3285,7 +3898,7 @@
     const buyer = this.roster[this.shopPlayer];
     const ready = !!(this.net && this.shopReady);
     ctx.fillStyle = buyer ? buyer.color : C.white;
-    ctx.font = 'bold 16px "Courier New", Courier, monospace';
+    ctx.font = font(16, true);
     ctx.fillText(buyer ? buyer.name + (ready ? " READY" : " BUYING") : "", 56, 108);
     let note = this.shopNote;
     if (ready) {
@@ -3294,10 +3907,10 @@
     }
     if (note) {
       ctx.fillStyle = ready ? C.yellow : C.lgreen;
-      ctx.font = '12px "Courier New", Courier, monospace';
+      ctx.font = font(12);
       ctx.fillText(note, 250, 112);
     }
-    ctx.font = '14px "Courier New", Courier, monospace';
+    ctx.font = font(14);
     this.shopBoxes = [];
     for (let i = 0; i < SHOP.length; i++) {
       const item = SHOP[i];
@@ -3318,7 +3931,7 @@
     ctx.fillText((doneSel ? "> " : "  ") + (this.net ? "DONE  —  ready" : "DONE  —  next tank"), 64, doneY);
     this.shopBoxes.push({ i: SHOP.length, y: doneY, h: 24 });
     ctx.fillStyle = C.dgray;
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     const quit = this.net ? "ESC leaves the game" : "ESC quits the series";
     ctx.fillText("↑↓ pick    ENTER buy    N done    " + quit, 56, 336);
   };
@@ -3330,15 +3943,15 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.fillStyle = C.yellow;
-    ctx.font = 'bold 22px "Courier New", Courier, monospace';
+    ctx.font = font(22, true);
     ctx.fillText(net.host ? "ONLINE ROOM" : "JOINED ROOM", W / 2, 58);
 
     if (net.error) {
       ctx.fillStyle = C.lred;
-      ctx.font = 'bold 16px "Courier New", Courier, monospace';
+      ctx.font = font(16, true);
       ctx.fillText(net.error, W / 2, 150);
       ctx.fillStyle = C.gray;
-      ctx.font = '12px "Courier New", Courier, monospace';
+      ctx.font = font(12);
       ctx.fillText("Online play needs the internet. Local modes still work.", W / 2, 184);
       ctx.fillStyle = C.white;
       ctx.fillText("ESC  back", W / 2, 300);
@@ -3346,24 +3959,24 @@
     }
     if (!net.code) {
       ctx.fillStyle = Math.floor(this.time * 3) % 2 ? C.yellow : C.white;
-      ctx.font = 'bold 16px "Courier New", Courier, monospace';
+      ctx.font = font(16, true);
       ctx.fillText("OPENING ROOM…", W / 2, 150);
       ctx.fillStyle = C.white;
-      ctx.font = '12px "Courier New", Courier, monospace';
+      ctx.font = font(12);
       ctx.fillText("ESC  back", W / 2, 300);
       return;
     }
 
     ctx.fillStyle = C.gray;
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     ctx.fillText("INVITE CODE", W / 2, 86);
     ctx.fillStyle = C.lcyan;
-    ctx.font = 'bold 40px "Courier New", Courier, monospace';
+    ctx.font = font(40, true);
     for (let i = 0; i < net.code.length; i++) {
       ctx.fillText(net.code[i], W / 2 + (i - (net.code.length - 1) / 2) * 34, 100);
     }
     const url = TankNet.inviteLink(net.code);
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     if (net.noteT > 0) {
       ctx.fillStyle = C.lgreen;
       ctx.fillText(net.note, W / 2, 148);
@@ -3375,7 +3988,7 @@
     const humans = net.host ? net.seats.length : net.humans;
     const cpu = net.host ? this.netCpu : net.cpu;
     ctx.textAlign = "left";
-    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.font = font(13);
     for (let i = 0; i < MAX_TANKS; i++) {
       const y = 170 + i * 17;
       const filled = i < humans + cpu;
@@ -3395,7 +4008,7 @@
         { id: "cpu", label: "CPU TANKS", value: String(this.netCpu) },
         { id: "diff", label: "DIFFICULTY", value: DIFF_LABELS[this.difficulty] },
       ];
-      ctx.font = '13px "Courier New", Courier, monospace';
+      ctx.font = font(13);
       for (let i = 0; i < rows.length; i++) {
         const y = 246 + i * 18;
         const sel = this.lobbyRow === i;
@@ -3410,16 +4023,16 @@
       this.drawLobbyButton(ctx, "start", "START", 330, canStart ? C.lgreen : C.dgray);
       ctx.textAlign = "center";
       ctx.fillStyle = C.gray;
-      ctx.font = '11px "Courier New", Courier, monospace';
+      ctx.font = font(11);
       ctx.fillText("↑ ↓ ← → set CPU    C copy link    ENTER start    ESC close", W / 2, 330);
     } else {
       ctx.textAlign = "center";
       ctx.fillStyle = Math.floor(this.time * 2) % 2 ? C.yellow : C.white;
-      ctx.font = 'bold 13px "Courier New", Courier, monospace';
+      ctx.font = font(13, true);
       ctx.fillText("WAITING FOR THE HOST TO START", W / 2, 254);
       this.drawLobbyButton(ctx, "leave", "LEAVE", 263, C.lred);
       ctx.fillStyle = C.gray;
-      ctx.font = '11px "Courier New", Courier, monospace';
+      ctx.font = font(11);
       ctx.fillText("ESC  leave", W / 2, 330);
     }
   };
@@ -3428,12 +4041,16 @@
     const y = 290;
     const w = 114;
     const h = 22;
-    ctx.fillStyle = "#3a3a3a";
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = color;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    if (MODERN) {
+      key(ctx, x, y, w, h, PAPER, false);
+    } else {
+      ctx.fillStyle = "#3a3a3a";
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = color;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    }
     ctx.fillStyle = color;
-    ctx.font = 'bold 12px "Courier New", Courier, monospace';
+    ctx.font = font(12, true);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(label, x + w / 2, y + h / 2 + 1);
@@ -3447,32 +4064,40 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.fillStyle = C.yellow;
-    ctx.font = 'bold 22px "Courier New", Courier, monospace';
+    ctx.font = font(22, true);
     ctx.fillText("JOIN A GAME", W / 2, 58);
     ctx.fillStyle = C.white;
-    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.font = font(13);
     ctx.fillText("TYPE THE INVITE CODE", W / 2, 96);
 
     const n = TankNet.CODE_LEN;
     const bw = 44;
     const gap = 10;
     const x0 = W / 2 - (n * bw + (n - 1) * gap) / 2;
-    ctx.font = 'bold 32px "Courier New", Courier, monospace';
+    ctx.font = font(32, true);
     ctx.textBaseline = "middle";
     for (let i = 0; i < n; i++) {
       const x = x0 + i * (bw + gap);
       const ch = this.joinCode[i] || "";
       const cursor = !this.net && i === this.joinCode.length && Math.floor(this.time * 3) % 2 === 0;
-      ctx.fillStyle = "#1a1a1a";
-      ctx.fillRect(x, 124, bw, 48);
       ctx.strokeStyle = cursor ? C.yellow : ch ? C.lcyan : C.dgray;
-      ctx.strokeRect(x + 0.5, 124.5, bw - 1, 47);
-      ctx.fillStyle = C.lcyan;
+      if (MODERN) {
+        roundPath(ctx, x + 0.5, 124.5, bw - 1, 47, 5);
+        ctx.fillStyle = C.black;
+        ctx.fill();
+        ctx.lineWidth = cursor ? 2 : 1;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(x, 124, bw, 48);
+        ctx.strokeRect(x + 0.5, 124.5, bw - 1, 47);
+      }
+      ctx.fillStyle = MODERN ? C.yellow : C.lcyan;
       ctx.fillText(ch, x + bw / 2, 150);
     }
 
     ctx.textBaseline = "top";
-    ctx.font = 'bold 13px "Courier New", Courier, monospace';
+    ctx.font = font(13, true);
     if (this.net) {
       ctx.fillStyle = Math.floor(this.time * 3) % 2 ? C.yellow : C.white;
       ctx.fillText(this.net.link ? "JOINING ROOM…" : "CONNECTING…", W / 2, 192);
@@ -3481,11 +4106,11 @@
       ctx.fillText(this.joinError, W / 2, 192);
     }
     ctx.fillStyle = C.gray;
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     ctx.fillText("Paste works too, code or whole invite link.", W / 2, 226);
     ctx.fillText("A friend's link drops you straight in.", W / 2, 242);
     ctx.fillStyle = C.white;
-    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.font = font(12);
     ctx.fillText("ENTER  join     BACKSPACE  fix     ESC  back", W / 2, 300);
   };
 
@@ -3494,13 +4119,13 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = C.lred;
-    ctx.font = 'bold 22px "Courier New", Courier, monospace';
+    ctx.font = font(22, true);
     ctx.fillText(this.netDownWhy || "CONNECTION LOST", W / 2, 160);
     ctx.fillStyle = C.gray;
-    ctx.font = '12px "Courier New", Courier, monospace';
+    ctx.font = font(12);
     ctx.fillText("The series ends here.", W / 2, 196);
     ctx.fillStyle = C.white;
-    ctx.font = '13px "Courier New", Courier, monospace';
+    ctx.font = font(13);
     ctx.fillText("ENTER  back to title", W / 2, 260);
   };
 
@@ -3518,7 +4143,7 @@
       text = "WAITING FOR HOST…";
     }
     if (!text) return;
-    ctx.font = '11px "Courier New", Courier, monospace';
+    ctx.font = font(11);
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     ctx.fillStyle = color;
@@ -3533,12 +4158,18 @@
   }
 
   Game.prototype.drawCallouts = function (ctx) {
-    ctx.font = 'bold 12px "Courier New", Courier, monospace';
+    ctx.font = font(12, true);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let i = 0; i < this.callouts.length; i++) {
       const c = this.callouts[i];
       ctx.globalAlpha = 1 - c.t / c.life;
+      if (MODERN) {
+        ctx.strokeStyle = PAPER;
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.strokeText(c.text, c.x, c.y);
+      }
       ctx.fillStyle = c.color;
       ctx.fillText(c.text, c.x, c.y);
     }
@@ -3547,7 +4178,7 @@
 
   Game.prototype.draw = function () {
     const ctx = this.ctx;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     ctx.globalAlpha = 1;
     ctx.setLineDash([]);
     ctx.clearRect(0, 0, W, H);
@@ -3602,12 +4233,74 @@
   };
 
   // ---------------------------------------------------------------------------
+  // 1990 / 2026
+  // ---------------------------------------------------------------------------
+  /** Palettes, fonts, sounds and canvas resolution for an era; what's on screen is recolored. */
+  Game.prototype.setEra = function (era) {
+    const oldColors = PLAYER_COLORS.slice();
+    const oldDims = PLAYER_DIM.slice();
+    MODERN = era === "2026";
+    Object.assign(C, MODERN ? PALETTE_2026 : VGA);
+    const keys = MODERN ? PLAYER_KEYS_2026 : PLAYER_KEYS;
+    for (let i = 0; i < keys.length; i++) {
+      PLAYER_COLORS[i] = C[keys[i]];
+      PLAYER_DIM[i] = MODERN ? PLAYER_DIM_2026[i] : C[PLAYER_DIM_KEYS[i]];
+    }
+    // Tanks change color by seat (P1 is cyan in 1990, orange in 2026), so their
+    // colors are swapped seat for seat; everything else follows its palette name.
+    const seat = Object.create(null);
+    for (let i = 0; i < oldColors.length; i++) {
+      seat[oldColors[i]] = PLAYER_COLORS[i];
+      seat[oldDims[i]] = PLAYER_DIM[i];
+    }
+    function recolor(list, fields, bySeat) {
+      if (!list) return;
+      for (let i = 0; i < list.length; i++) {
+        for (let f = 0; f < fields.length; f++) {
+          const v = list[i][fields[f]];
+          if (v) list[i][fields[f]] = (bySeat && seat[v]) || tint(v);
+        }
+      }
+    }
+    recolor(this.tanks, ["color", "dim"], true);
+    for (let i = 0; i < this.tanks.length; i++) recolor(this.tanks[i].bits, ["c"], true);
+    recolor(this.roster, ["color", "dim"], true);
+    recolor(this.roundLines, ["color"], true);
+    recolor(this.callouts, ["color"]);
+    recolor(this.particles, ["c"]);
+    recolor(this.stars, ["c"]);
+    this.paperSky = null;
+    // The canvas draws every frame, so 2026 text switches over once the fonts arrive.
+    if (MODERN && document.fonts && document.fonts.load) {
+      document.fonts.load(font(12));
+      document.fonts.load(font(12, true));
+      document.fonts.load(font(24, true));
+    }
+    this.resize();
+  };
+
+  /** 2026 renders at about the screen's own resolution, in half steps up to 3x. */
+  Game.prototype.resize = function () {
+    let s = 1;
+    if (MODERN) {
+      const shown = this.canvas.getBoundingClientRect().width || W;
+      s = clamp(Math.round(((shown * (window.devicePixelRatio || 1)) / W) * 2) / 2, 1, 3);
+    }
+    if (s !== this.scale || this.canvas.width !== W * s) {
+      this.scale = s;
+      this.canvas.width = W * s;
+      this.canvas.height = H * s;
+      this.paperSky = null;
+    }
+    this.ctx.imageSmoothingEnabled = MODERN;
+  };
+
+  // ---------------------------------------------------------------------------
   // Sharing — when a series ends: a 1200x675 card built from a photo of the
   // last hill's final blow, and a dialog to send it somewhere.
   // ---------------------------------------------------------------------------
   const CARD_W = 1200;
   const CARD_H = 675;
-  const CARD_FONT = '"Courier New", Courier, monospace';
 
   /** The front page, which is what a stranger should land on. */
   function siteUrl() {
@@ -3622,10 +4315,10 @@
 
   Game.prototype.grabFrame = function () {
     if (this.demo) return;
-    if (!this.finalFrame) {
-      this.finalFrame = document.createElement("canvas");
-      this.finalFrame.width = W;
-      this.finalFrame.height = H;
+    if (!this.finalFrame) this.finalFrame = document.createElement("canvas");
+    if (this.finalFrame.width !== this.canvas.width) {
+      this.finalFrame.width = this.canvas.width;
+      this.finalFrame.height = this.canvas.height;
     }
     this.finalFrame.getContext("2d").drawImage(this.canvas, 0, 0);
     this.finalFrameRound = this.round;
@@ -3710,28 +4403,39 @@
     c.width = CARD_W;
     c.height = CARD_H;
     const ctx = c.getContext("2d");
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = MODERN;
     ctx.fillStyle = C.black;
     ctx.fillRect(0, 0, CARD_W, CARD_H);
 
     // The battlefield (playfield only, no HUD) blown up with hard pixels.
     const bar = 64;
-    if (frame) ctx.drawImage(frame, 0, PLAY_TOP, W, H - PLAY_TOP - FOOT, 0, bar, CARD_W, CARD_H - bar);
+    if (frame) {
+      const k = frame.width / W;
+      ctx.drawImage(frame, 0, PLAY_TOP * k, W * k, (H - PLAY_TOP - FOOT) * k, 0, bar, CARD_W, CARD_H - bar);
+    }
+    // Scanlines belong to the CRT; 2026 skips them.
     ctx.fillStyle = "rgba(0,0,0,0.16)";
-    for (let y = bar; y < CARD_H; y += 3) ctx.fillRect(0, y, CARD_W, 1);
+    if (!MODERN) for (let y = bar; y < CARD_H; y += 3) ctx.fillRect(0, y, CARD_W, 1);
 
-    ctx.fillStyle = C.blue;
-    ctx.fillRect(0, 0, CARD_W, bar);
-    ctx.fillStyle = C.white;
-    ctx.fillRect(0, bar - 8, CARD_W, 2);
-    ctx.fillRect(0, bar - 4, CARD_W, 2);
+    if (MODERN) {
+      ctx.fillStyle = PAPER;
+      ctx.fillRect(0, 0, CARD_W, bar);
+      ctx.fillStyle = C.black;
+      ctx.fillRect(0, bar - 2, CARD_W, 2);
+    } else {
+      ctx.fillStyle = C.blue;
+      ctx.fillRect(0, 0, CARD_W, bar);
+      ctx.fillStyle = C.white;
+      ctx.fillRect(0, bar - 8, CARD_W, 2);
+      ctx.fillRect(0, bar - 4, CARD_W, 2);
+    }
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
-    ctx.font = "bold 36px " + CARD_FONT;
+    ctx.font = font(36, true);
     ctx.fillStyle = C.yellow;
     ctx.fillText("TANK WARS", 30, 28);
     ctx.textAlign = "right";
-    ctx.font = "bold 22px " + CARD_FONT;
+    ctx.font = font(22, true);
     ctx.fillStyle = C.lcyan;
     ctx.fillText(info.mode, CARD_W - 30, 29);
 
@@ -3739,35 +4443,51 @@
     const x = 40;
     const y = 104;
     const w = 580;
-    ctx.font = "bold 42px " + CARD_FONT;
+    ctx.font = font(42, true);
     const head = wrapLines(ctx, info.headline, w - 72);
     const h = 70 + head.length * 46 + 70 + 34 + info.rows.length * 34 + 22;
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(x + 14, y + 14, w, h);
-    ctx.fillStyle = C.blue;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = C.white;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 11, y + 11, w - 22, h - 22);
-    ctx.strokeRect(x + 17, y + 17, w - 34, h - 34);
-    ctx.font = "bold 20px " + CARD_FONT;
+    ctx.font = font(20, true);
     ctx.textAlign = "center";
     const title = " SERIES OVER ";
-    const tw = ctx.measureText(title).width;
-    ctx.fillStyle = C.blue;
-    ctx.fillRect(x + w / 2 - tw / 2, y + 4, tw, 22);
-    ctx.fillStyle = C.white;
-    ctx.fillText(title, x + w / 2, y + 15);
+    if (MODERN) {
+      panel(ctx, x, y, w, h, 14);
+      // A black label tab with a status LED, like the front page's windows.
+      ctx.font = font(16, true);
+      const tab = ctx.measureText(title.trim()).width + 44;
+      roundPath(ctx, x + w / 2 - tab / 2, y + 12, tab, 26, 4);
+      ctx.fillStyle = C.black;
+      ctx.fill();
+      ctx.fillStyle = C.yellow;
+      ctx.beginPath();
+      ctx.arc(x + w / 2 - tab / 2 + 14, y + 25, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = PAPER;
+      ctx.fillText(title.trim(), x + w / 2 + 8, y + 26);
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(x + 14, y + 14, w, h);
+      ctx.fillStyle = C.blue;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = C.white;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 11, y + 11, w - 22, h - 22);
+      ctx.strokeRect(x + 17, y + 17, w - 34, h - 34);
+      const tw = ctx.measureText(title).width;
+      ctx.fillStyle = C.blue;
+      ctx.fillRect(x + w / 2 - tw / 2, y + 4, tw, 22);
+      ctx.fillStyle = C.white;
+      ctx.fillText(title, x + w / 2, y + 15);
+    }
 
     let cy = y + 62;
     ctx.textAlign = "left";
-    ctx.font = "bold 42px " + CARD_FONT;
+    ctx.font = font(42, true);
     ctx.fillStyle = C.yellow;
     for (let i = 0; i < head.length; i++) {
       ctx.fillText(head[i], x + 36, cy);
       cy += 46;
     }
-    ctx.font = "bold 56px " + CARD_FONT;
+    ctx.font = font(56, true);
     ctx.fillStyle = C.white;
     ctx.fillText(info.score, x + 36, cy + 12);
     cy += 70;
@@ -3778,13 +4498,13 @@
       { label: "DMG", key: "dmg", right: x + 456 },
       { label: "SHOTS", key: "shots", right: x + 544 },
     ];
-    ctx.font = "bold 18px " + CARD_FONT;
+    ctx.font = font(18, true);
     ctx.fillStyle = C.gray;
     ctx.fillText("TANK", x + 36, cy);
     ctx.textAlign = "right";
     for (let i = 0; i < cols.length; i++) ctx.fillText(cols[i].label, cols[i].right, cy);
     cy += 34;
-    ctx.font = "bold 24px " + CARD_FONT;
+    ctx.font = font(24, true);
     for (let i = 0; i < info.rows.length; i++) {
       const r = info.rows[i];
       const mine = info.me && r.id === info.me.id;
@@ -3801,8 +4521,9 @@
       cy += 34;
     }
 
-    const where = url ? "PLAY FREE AT " + url.replace(/^https?:\/\//, "").replace(/\/$/, "") : "TANK WARS · A 1990 TRIBUTE";
-    ctx.font = "bold 22px " + CARD_FONT;
+    const tagline = MODERN ? "TANK WARS · MODEL TW-26" : "TANK WARS · A 1990 TRIBUTE";
+    const where = url ? "PLAY FREE AT " + url.replace(/^https?:\/\//, "").replace(/\/$/, "") : tagline;
+    ctx.font = font(22, true);
     ctx.textAlign = "right";
     const ww = ctx.measureText(where).width;
     ctx.fillStyle = "rgba(0,0,0,0.78)";
@@ -4106,7 +4827,7 @@
         }
         return;
       }
-      if (aim) this.tryFire();
+      if (aim && this.fireLock <= 0) this.tryFire();
     }
   };
 
@@ -4149,6 +4870,47 @@
       game.onlineRole = "host";
       game.hostOnline();
     }
+  }
+
+  // 1990 / 2026 (js/era.js). The page around the canvas restyles itself in CSS.
+  if (window.TankEra) {
+    game.setEra(window.TankEra.get());
+    window.TankEra.onChange(function (era) {
+      game.setEra(era);
+    });
+  }
+  let resizing = 0;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizing);
+    resizing = setTimeout(function () {
+      game.resize();
+    }, 120);
+  });
+
+  // The era buttons in the menu bar hand focus back too, or Space would flip the era.
+  const picks = document.querySelectorAll("[data-era-pick]");
+  for (let i = 0; i < picks.length; i++) {
+    picks[i].addEventListener("click", function () {
+      canvas.focus();
+    });
+  }
+
+  // Menu bar FULL SCREEN button. Hidden where the page can't go full screen
+  // (iPhone). Focus goes back to the canvas so Space fires instead of
+  // pressing the button again.
+  const fullBtn = document.getElementById("full");
+  if (fullBtn && document.fullscreenEnabled) {
+    fullBtn.hidden = false;
+    fullBtn.addEventListener("click", function () {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen().catch(function () {});
+      canvas.focus();
+    });
+    document.addEventListener("fullscreenchange", function () {
+      const on = !!document.fullscreenElement;
+      fullBtn.textContent = on ? "WINDOW" : "FULL SCREEN";
+      fullBtn.setAttribute("aria-pressed", String(on));
+    });
   }
 
   window.addEventListener("paste", function (e) {

@@ -20,12 +20,13 @@ What's on the hill:
 
 - **Terrain you can wreck.** Every hill is a new canyon, mesa, or water gap. Blow the dirt out from under a tank and down it goes.
 - **Wind with a grudge.** It changes every turn, sometimes completely. The shot that worked last time is lying to you now.
-- **A shop between hills.** Spend your kill money on HE bombs, MIRVs, dirt bombs, shields, guidance, and a $1200 nuke labeled *do not miss*.
+- **A shop between hills.** Spend your kill money on HE bombs, MIRVs, dirt bombs, shields, guidance, and a $1200 nuke labeled *do not miss*. Or get them free: shoot the loot crates that drop mid-battle.
 - **CPU rivals with attitude.** *Rookie*, *Lobber*, and *Windmaster* take you on one at a time. Add more and *Viper*, *Hammer*, and *Brutus* go free-for-all, shooting whoever is closest, including each other.
 - **Couch warfare.** Hotseat for 2–4 people on one keyboard, with a `LOOK AWAY` screen so nobody peeks at your aim.
 - **Online with a five-letter code.** Send a friend `K7Q4M` and you're on the same hill, peer-to-peer, with no server to run.
 - **Bragging rights.** Finish a series and the game hands you a result card of the final blow, ready to post.
 - **Bleeps and booms.** Every sound is synthesized live in the browser with Web Audio oscillators and noise.
+- **1990 or 2026.** Flip the switch in the menu bar and the whole thing, front page and game, jumps 36 years: dot-matrix type, warm-gray hardware, black ink, one signal orange, and rounder synth sounds. Same hill, same physics, same opponents.
 
 All graphics and sounds are original. Nothing was copied from the DOS binaries.
 
@@ -54,6 +55,14 @@ All graphics and sounds are original. Nothing was copied from the DOS binaries.
     <td align="center"><sub>Last tank standing takes the hill, and the payout.</sub></td>
     <td align="center"><sub>Between hills, everybody goes shopping.</sub></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="img/readme/game-2026.png" alt="2026 mode: black hills on dot-grid paper, a pink tank inside a dashed shield ring, a blue water gap, and a row of keys for the weapons" /></td>
+    <td width="50%"><img src="img/readme/landing-2026.png" alt="2026 front page: the TANK WARS logo on a dot-matrix display, an orange and a blue tank on a charcoal hill" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>2026 mode. Same water gap, rebuilt as hardware.</sub></td>
+    <td align="center"><sub>The 2026 front page. The logo is a dot-matrix display now, and you can still shoot it.</sub></td>
+  </tr>
 </table>
 
 ## Run it
@@ -65,6 +74,18 @@ python3 -m http.server 43721
 ```
 
 Then visit `http://127.0.0.1:43721/`. No build step, no backend. Online play needs an internet connection (see below); everything else runs offline.
+
+## 1990 / 2026
+
+The **1990 · 2026** keys in the menu bar (on the front page and above the game) switch eras:
+
+| | 1990 | 2026 |
+| --- | --- | --- |
+| Look | VGA palette, chunky pixels, text-mode windows | Warm-gray hardware, black ink, signal orange, dot-matrix display type |
+| Game screen | Blocky 640×400, scaled up | The same 640×400 field drawn sharp at your screen's resolution |
+| Sound | Square and sawtooth beeps | Sine and triangle tones, deeper booms, a short echo |
+
+The choice is remembered, other open tabs follow along, and a link with `?era=2026` (or `?era=1990`) opens in that era. Only the drawing and the sounds change, so an online match works with players in different eras.
 
 ## Front page
 
@@ -99,7 +120,9 @@ A match is a **best of 5**: first tank to **3 hill wins** takes the series (or t
 | **ROOM** | (online) **HOST** opens a room and shows an invite code · **JOIN** asks for a friend's code |
 | **SOUND** | On / Off |
 
-**← →** change the highlighted value · **↑ ↓** move between rows · **Enter** or **click** to start.
+**← →** change the highlighted value · **↑ ↓** move between rows · **Enter** or **click** to start · **Esc** back to the front page.
+
+The game fills the browser window. The bar above it has **◄ EXIT TO HOME** and a **FULL SCREEN** button (hidden on iPhone, which can't do full screen for a page).
 
 Hotseat opens on `P1 — LOOK AWAY` before the hill is shown, then blanks again before every later human turn. Press **Enter** when the keyboard has been passed.
 
@@ -156,9 +179,23 @@ A centered hit kills. A graze takes a chunk and prints the damage. An HE bomb on
 | **Space** or **Enter** | Fire. During a CPU turn, skip straight to the shot |
 | **T** | Toggle the dotted arc while you have guidance. Firing with it on spends one charge. With none left, the banner says NO GUIDANCE |
 | **M** | Mute / unmute all sound |
-| **Esc** | Back to the title (ends the series) |
+| **Esc** | Back to the title (ends the series). In full screen, the first Esc only leaves full screen |
 
 A **READY?** banner flashes on each turn. A near miss prints **CLOSE!** and a shield prints **BLOCKED**. Wind is in the top bar (`<<<` west, `>>>` east). It changes every turn, sometimes completely, so an aim that hit last time usually needs adjusting. A big change flashes **WIND SHIFT**. Explosions bite craters; tanks fall if the dirt under them disappears. The bottom strip shows the map, series score, cash, shields, and guidance.
+
+### Loot crates
+
+Every few turns, and after every kill, a blinking supply crate drops onto the hill. Tanks can't drive, so you claim a crate by **shooting it**. Hit it, or land a blast close enough to catch it, and its rounds go to whoever fired, with a green **+NUKE** (or whatever was inside) over the spot. Anyone can take it, CPU tanks included.
+
+| Crate | You get |
+| --- | --- |
+| BOMB | 2 HE bombs |
+| MIRV | 1 MIRV |
+| DIGGER | 1 digger |
+| DIRT | 1 dirt bomb |
+| NUKE | 1 nuke |
+
+Bigger weapons catch crates from farther away: a shell has to land within about 20 px, an HE bomb about 34, a nuke about 52.
 
 ### Shop
 
@@ -173,7 +210,7 @@ Between hills, each tank spends cash. A hill win pays **$700**, a kill **$400**,
 | SHIELD | $650 | Blocks the next hit, including a fall |
 | NUKE | $1200 | Huge blast |
 
-**↑ ↓** pick, **Enter** buy, **N** finished, or click a row. CPU tanks buy on their own. Ammo you do not fire carries to the next hill. Crates in a battle still drop extra rounds.
+**↑ ↓** pick, **Enter** buy, **N** finished, or click a row. CPU tanks buy on their own. Ammo you do not fire carries to the next hill, and so does anything you won from a crate.
 
 ### Weapons
 
@@ -188,7 +225,7 @@ Crew (top-right) is health. Damaged tanks cannot crank the cannon as hard.
 
 ### Sound
 
-All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, UI ticks while you adjust aim, crate and shop pickups, a light wind whoosh, and a win or lose jingle.
+All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, UI ticks while you adjust aim, crate and shop pickups, a light wind whoosh, and a win or lose jingle. In 2026 the same events play rounder sine and triangle tones through a short echo.
 
 - **M** during play, or the **SOUND** row on the title screen
 - HUD shows **MUTE** / **SND**
@@ -197,16 +234,17 @@ All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, U
 
 ```
 index.html      front page
-landing.css     front page styles (VGA palette, soil layers, text-mode windows)
+js/era.js       the 1990 / 2026 switch, shared by both pages
+landing.css     front page styles (VGA palette, soil layers, text-mode windows; 2026 section at the end)
 js/landing.js   front page toys (shootable logo, attract monitor, join box, blast chart)
 play.html       the game page
-styles.css      game page: monitor bezel, pixel scaling
+styles.css      game page: menu bar, monitor bezel, pixel scaling, 2026 section at the end
 js/net.js       online transport (PeerJS loader, invite codes, peer links)
 js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
 favicon.svg     pixel tank icon
-img/demo.png    a real frame from the game, used when motion is reduced
+img/demo.png    a real frame from the game, used when motion is reduced (img/demo-2026.jpg in 2026)
 img/readme/     screenshots and GIFs for this README, recorded from the real game
-fonts/          VT323 (SIL Open Font License, see VT323-OFL.txt)
+fonts/          VT323 for 1990; Doto and IBM Plex Mono for 2026 (all SIL Open Font License, see the *-OFL.txt files)
 ```
 
 Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it needs special flight, a new `kind` in `stepShots`. Shop entries live in the `SHOP` array.

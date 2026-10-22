@@ -8,9 +8,18 @@
     <meta property="og:title" content="Tank Wars — you're invited to the hill" />
     <meta property="og:description" content="Turn-based VGA artillery for 1–4 players. Free, in your browser." />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <script src="js/era.js"></script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <header id="bar">
+      <a id="home" href="./">◄ <span class="bar-wide">EXIT TO </span>HOME</a>
+      <div class="era-switch" role="group" aria-label="Era">
+        <button type="button" data-era-pick="1990" aria-pressed="true">1990</button>
+        <button type="button" data-era-pick="2026" aria-pressed="false">2026</button>
+      </div>
+      <button id="full" type="button" aria-pressed="false" hidden>FULL SCREEN</button>
+    </header>
     <div id="monitor">
       <canvas id="game" width="640" height="400" aria-label="Tank Wars game"></canvas>
     </div>
