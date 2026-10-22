@@ -26,6 +26,7 @@ What's on the hill:
 - **Online with a five-letter code.** Send a friend `K7Q4M` and you're on the same hill, peer-to-peer, with no server to run.
 - **Bragging rights.** Finish a series and the game hands you a result card of the final blow, ready to post.
 - **Bleeps and booms.** Every sound is synthesized live in the browser with Web Audio oscillators and noise.
+- **1990 or 2026.** Flip the switch in the menu bar and the whole thing, front page and game, jumps 36 years: dot-matrix type, warm-gray hardware, black ink, one signal orange, and rounder synth sounds. Same hill, same physics, same opponents.
 
 All graphics and sounds are original. Nothing was copied from the DOS binaries.
 
@@ -54,6 +55,14 @@ All graphics and sounds are original. Nothing was copied from the DOS binaries.
     <td align="center"><sub>Last tank standing takes the hill, and the payout.</sub></td>
     <td align="center"><sub>Between hills, everybody goes shopping.</sub></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="img/readme/game-2026.png" alt="2026 mode: black hills on dot-grid paper, a pink tank inside a dashed shield ring, a blue water gap, and a row of keys for the weapons" /></td>
+    <td width="50%"><img src="img/readme/landing-2026.png" alt="2026 front page: the TANK WARS logo on a dot-matrix display, an orange and a blue tank on a charcoal hill" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>2026 mode. Same water gap, rebuilt as hardware.</sub></td>
+    <td align="center"><sub>The 2026 front page. The logo is a dot-matrix display now, and you can still shoot it.</sub></td>
+  </tr>
 </table>
 
 ## Run it
@@ -65,6 +74,18 @@ python3 -m http.server 43721
 ```
 
 Then visit `http://127.0.0.1:43721/`. No build step, no backend. Online play needs an internet connection (see below); everything else runs offline.
+
+## 1990 / 2026
+
+The **1990 · 2026** keys in the menu bar (on the front page and above the game) switch eras:
+
+| | 1990 | 2026 |
+| --- | --- | --- |
+| Look | VGA palette, chunky pixels, text-mode windows | Warm-gray hardware, black ink, signal orange, dot-matrix display type |
+| Game screen | Blocky 640×400, scaled up | The same 640×400 field drawn sharp at your screen's resolution |
+| Sound | Square and sawtooth beeps | Sine and triangle tones, deeper booms, a short echo |
+
+The choice is remembered, other open tabs follow along, and a link with `?era=2026` (or `?era=1990`) opens in that era. Only the drawing and the sounds change, so an online match works with players in different eras.
 
 ## Front page
 
@@ -204,7 +225,7 @@ Crew (top-right) is health. Damaged tanks cannot crank the cannon as hard.
 
 ### Sound
 
-All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, UI ticks while you adjust aim, crate and shop pickups, a light wind whoosh, and a win or lose jingle.
+All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, UI ticks while you adjust aim, crate and shop pickups, a light wind whoosh, and a win or lose jingle. In 2026 the same events play rounder sine and triangle tones through a short echo.
 
 - **M** during play, or the **SOUND** row on the title screen
 - HUD shows **MUTE** / **SND**
@@ -213,16 +234,17 @@ All SFX are synthesized (no audio files): fire, explosion, hit, death, splash, U
 
 ```
 index.html      front page
-landing.css     front page styles (VGA palette, soil layers, text-mode windows)
+js/era.js       the 1990 / 2026 switch, shared by both pages
+landing.css     front page styles (VGA palette, soil layers, text-mode windows; 2026 section at the end)
 js/landing.js   front page toys (shootable logo, attract monitor, join box, blast chart)
 play.html       the game page
-styles.css      game page: monitor bezel, pixel scaling
+styles.css      game page: menu bar, monitor bezel, pixel scaling, 2026 section at the end
 js/net.js       online transport (PeerJS loader, invite codes, peer links)
 js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
 favicon.svg     pixel tank icon
-img/demo.png    a real frame from the game, used when motion is reduced
+img/demo.png    a real frame from the game, used when motion is reduced (img/demo-2026.jpg in 2026)
 img/readme/     screenshots and GIFs for this README, recorded from the real game
-fonts/          VT323 (SIL Open Font License, see VT323-OFL.txt)
+fonts/          VT323 for 1990; Doto and IBM Plex Mono for 2026 (all SIL Open Font License, see the *-OFL.txt files)
 ```
 
 Add a weapon by appending to the `WEAPONS` array in `js/game.js` and, if it needs special flight, a new `kind` in `stepShots`. Shop entries live in the `SHOP` array.

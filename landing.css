@@ -11,6 +11,33 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Doto";
+  src: url("fonts/Doto-Variable.woff2") format("woff2");
+  font-weight: 400 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("fonts/IBMPlexMono-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+
+/* Copy that only belongs to one era (see the 2026 section at the end). */
+:root:not([data-era="2026"]) .e26,
+:root[data-era="2026"] .e90 {
+  display: none !important;
+}
+
 :root {
   --black: #000000;
   --blue: #0000aa;
@@ -167,8 +194,32 @@ a:hover {
   color: var(--red);
 }
 
-.menubar-snd {
+.era-switch {
+  display: flex;
   margin-left: auto;
+  border: 2px solid var(--black);
+}
+
+.era-switch button {
+  padding: 1px 8px 0;
+  font: inherit;
+  color: var(--black);
+  background: var(--gray);
+  border: 0;
+  cursor: pointer;
+}
+
+.era-switch button:hover {
+  background: var(--green);
+}
+
+.era-switch button[aria-pressed="true"] {
+  color: var(--yellow);
+  background: var(--blue);
+}
+
+.menubar-snd {
+  margin-left: 10px;
   padding: 3px 10px 2px;
   font: inherit;
   color: var(--lred);
@@ -189,6 +240,18 @@ a:hover {
 
   .menubar a {
     padding-inline: 7px;
+  }
+}
+
+/* Phones: the era switch and sound need the room more than Modes and Online,
+   which are a scroll away anyway. */
+@media (max-width: 560px) {
+  .menubar-mid {
+    display: none;
+  }
+
+  .menubar-snd {
+    white-space: nowrap;
   }
 }
 
@@ -1128,5 +1191,767 @@ kbd.down {
   .crt-cover span,
   .cursor {
     animation: none;
+  }
+}
+
+
+/* ===================================================================== 2026
+ * The same page as a piece of 2026 hardware: warm-gray housing, black ink,
+ * one signal orange, a dot-matrix display face, keys that press down.
+ * Everything above still applies; this only overrides it. The VGA tokens are
+ * remapped first, so anything not restyled here still lands on the new palette.
+ */
+
+:root[data-era="2026"] {
+  --black: #111111;
+  --blue: #1f4fff;
+  --green: #00a36c;
+  --cyan: #1f4fff;
+  --red: #d42e12;
+  --brown: #8a6a3b;
+  --gray: #5f5c56;
+  --dgray: #9a968e;
+  --lgreen: #00a36c;
+  --lcyan: #1f4fff;
+  --lred: #e8380d;
+  --lmag: #d6336c;
+  --yellow: #ff4f00;
+  --white: #111111;
+  --bedrock: #d6d3cb;
+
+  --paper: #e9e7e2;
+  --panel: #f4f3ef;
+  --housing: #d6d3cb;
+  --ink: #111111;
+  --ink-2: #5f5c56;
+  --ink-3: #9a968e;
+  --rule: rgba(17, 17, 17, 0.16);
+  --signal: #ff4f00;
+  --lcd: #141414;
+  --lcd-ink: #e9e7e2;
+  --lcd-dim: #8d8a84;
+
+  --font: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --dot: "Doto", "IBM Plex Mono", ui-monospace, monospace;
+  --drop: none;
+  scroll-padding-top: 64px;
+}
+
+[data-era="2026"] body {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--paper);
+  counter-reset: section;
+}
+
+[data-era="2026"] :focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+[data-era="2026"] a {
+  color: var(--ink);
+  text-decoration-color: var(--signal);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+[data-era="2026"] a:hover {
+  color: var(--signal);
+}
+
+/* A key: flat face, black edge, sits up on a 2px ledge until pressed. */
+[data-era="2026"] .era-switch button,
+[data-era="2026"] .menubar-snd {
+  position: relative;
+  padding: 6px 10px 5px 22px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+/* Each key has a status LED. */
+[data-era="2026"] .era-switch button::before,
+[data-era="2026"] .menubar-snd::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  background: var(--ink-3);
+  border-radius: 50%;
+}
+
+[data-era="2026"] .era-switch button:hover,
+[data-era="2026"] .menubar-snd:hover {
+  background: #ffffff;
+}
+
+[data-era="2026"] .era-switch button[aria-pressed="true"] {
+  background: var(--signal);
+  box-shadow: 0 0 0 var(--ink);
+  transform: translateY(2px);
+}
+
+[data-era="2026"] .era-switch button[aria-pressed="true"]::before {
+  background: var(--ink);
+}
+
+[data-era="2026"] .menubar-snd[aria-pressed="true"]::before {
+  background: var(--signal);
+}
+
+/* menu bar: a strip of hardware */
+
+[data-era="2026"] .menubar {
+  gap: 4px;
+  height: 52px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--panel);
+  border-bottom: 1px solid var(--ink);
+  box-shadow: none;
+}
+
+[data-era="2026"] .menubar a {
+  padding: 6px 10px;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+[data-era="2026"] .menubar a:hover,
+[data-era="2026"] .menubar a:focus-visible {
+  color: var(--panel);
+  background: var(--ink);
+}
+
+[data-era="2026"] .menubar .menubar-home {
+  letter-spacing: 0.16em;
+}
+
+[data-era="2026"] .menubar-home img {
+  filter: grayscale(1) contrast(1.6);
+}
+
+[data-era="2026"] .hot {
+  color: inherit;
+}
+
+[data-era="2026"] .era-switch {
+  gap: 4px;
+  border: 0;
+}
+
+[data-era="2026"] .menubar-snd {
+  margin-left: 12px;
+}
+
+/* hero: the logo on a dot-matrix display, a small LCD readout in the corner */
+
+[data-era="2026"] .hero {
+  background: var(--panel);
+  border-bottom: 1px solid var(--ink);
+}
+
+[data-era="2026"] .field {
+  image-rendering: auto;
+}
+
+[data-era="2026"] .hud {
+  top: 14px;
+  left: 14px;
+  right: auto;
+  gap: 16px;
+  max-width: calc(100% - 28px);
+  height: 30px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lcd-dim);
+  background: var(--lcd);
+  border: 0;
+  border-radius: 6px;
+}
+
+[data-era="2026"] .hud b {
+  color: var(--lcd-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-era="2026"] .hud-you,
+[data-era="2026"] .hud-hint,
+[data-era="2026"] .hud-logo b {
+  color: var(--signal);
+}
+
+[data-era="2026"] .hud-wind,
+[data-era="2026"] .hud-wind.west {
+  color: var(--lcd-dim);
+}
+
+/* sections: numbered panels of the same machine */
+
+[data-era="2026"] .layer {
+  counter-increment: section;
+  background-color: var(--paper);
+  background-image: none;
+  border-top: 1px solid var(--rule);
+}
+
+[data-era="2026"] .layer::before,
+[data-era="2026"] .surface::before {
+  content: counter(section, decimal-leading-zero);
+  display: block;
+  top: 18px;
+  left: 20px;
+  right: auto;
+  height: auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  background: none;
+  -webkit-mask: none;
+  mask: none;
+}
+
+[data-era="2026"] .layer-3,
+[data-era="2026"] .layer-5 {
+  background-color: #e2dfd9;
+}
+
+[data-era="2026"] .bedrock {
+  color: var(--ink-2);
+  background-color: var(--housing);
+  background-image: none;
+  border-top: 1px solid var(--ink);
+}
+
+[data-era="2026"] .surface {
+  padding-top: 64px;
+}
+
+[data-era="2026"] .lede {
+  font-family: var(--dot);
+  font-size: clamp(40px, 6vw, 84px);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--ink);
+  text-shadow: none;
+}
+
+[data-era="2026"] .lede em {
+  color: var(--signal);
+}
+
+[data-era="2026"] .sub {
+  max-width: 52ch;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+[data-era="2026"] .fine {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* buttons are keys */
+
+[data-era="2026"] .btn {
+  padding: 14px 22px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--signal);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 0 4px 0 var(--ink);
+  transition:
+    transform 0.06s,
+    box-shadow 0.06s;
+}
+
+[data-era="2026"] .btn:hover {
+  color: var(--ink);
+  background: #ff6a26;
+}
+
+[data-era="2026"] .btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+[data-era="2026"] .btn-alt,
+[data-era="2026"] .btn-plain {
+  background: var(--panel);
+}
+
+[data-era="2026"] .btn-alt:hover,
+[data-era="2026"] .btn-plain:hover {
+  background: #ffffff;
+}
+
+/* windows are flat panels with a label tab */
+
+[data-era="2026"] .win,
+[data-era="2026"] .win-gray {
+  padding: 26px 30px 28px;
+  color: var(--ink-2);
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+[data-era="2026"] .win::before,
+[data-era="2026"] .win::after {
+  display: none;
+}
+
+[data-era="2026"] .win-title,
+[data-era="2026"] .win-gray .win-title {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--panel);
+  background: var(--ink);
+  border-radius: 4px;
+  transform: none;
+}
+
+[data-era="2026"] .win-title::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--signal);
+  border-radius: 50%;
+}
+
+[data-era="2026"] .win h2 {
+  font-family: var(--dot);
+  font-size: clamp(30px, 3.6vw, 46px);
+  font-weight: 800;
+  line-height: 1.04;
+  color: var(--ink);
+}
+
+[data-era="2026"] .win b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+[data-era="2026"] code {
+  padding: 1px 6px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
+/* the attract-mode monitor is a handheld unit */
+
+[data-era="2026"] .crt {
+  padding: 14px 14px 0;
+  background: var(--housing);
+  border: 1px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 0 6px 0 var(--ink);
+}
+
+[data-era="2026"] .crt-screen {
+  border-radius: 6px;
+  box-shadow: 0 0 0 6px var(--lcd);
+}
+
+[data-era="2026"] .crt-screen::after {
+  display: none;
+}
+
+[data-era="2026"] .crt-cover span {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--panel);
+  background: var(--ink);
+  border-radius: 4px;
+  text-shadow: none;
+}
+
+[data-era="2026"] .crt-chin {
+  height: 50px;
+  padding: 0 4px;
+}
+
+[data-era="2026"] .crt-badge {
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--ink-2);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+}
+
+[data-era="2026"] .crt-knobs i {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+[data-era="2026"] .crt-knobs i::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  width: 2px;
+  height: 6px;
+  margin-left: -1px;
+  background: var(--ink);
+}
+
+[data-era="2026"] .crt-knobs i + i::after {
+  transform: rotate(60deg);
+  transform-origin: 1px 6px;
+}
+
+[data-era="2026"] .crt-led {
+  width: 8px;
+  height: 8px;
+  background: var(--signal);
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+/* setup dialog: a column of radio keys with LEDs */
+
+[data-era="2026"] .setup-list {
+  padding: 6px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+}
+
+[data-era="2026"] .setup-list legend {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}
+
+[data-era="2026"] .setup-list label {
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  border-radius: 5px;
+}
+
+[data-era="2026"] .setup-list label:hover {
+  background: var(--housing);
+}
+
+[data-era="2026"] .setup-list input + span::before,
+[data-era="2026"] .setup-list input:checked + span::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 10px;
+  vertical-align: 1px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+[data-era="2026"] .setup-list input:checked + span::before {
+  background: var(--signal);
+  border-color: var(--signal);
+}
+
+[data-era="2026"] .setup-list label.on {
+  color: var(--panel);
+  background: var(--ink);
+}
+
+[data-era="2026"] .spec {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--signal);
+}
+
+[data-era="2026"] .setup-rules {
+  border-top: 1px solid var(--rule);
+}
+
+[data-era="2026"] .setup-status {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--signal);
+}
+
+/* terminal: an LCD */
+
+[data-era="2026"] .term {
+  overflow: hidden;
+  background: var(--lcd);
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 0 6px 0 var(--ink);
+}
+
+[data-era="2026"] .term-bar {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--lcd-dim);
+  background: #1e1e1c;
+  border-bottom: 1px solid #000000;
+}
+
+[data-era="2026"] .term-body {
+  min-height: 260px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: #cfccc5;
+}
+
+[data-era="2026"] .term-body .p2 {
+  color: #ff8a5c;
+}
+
+[data-era="2026"] .term-body .p4,
+[data-era="2026"] .term-body .ok {
+  color: #3ccf8e;
+}
+
+[data-era="2026"] .steps li::before {
+  top: 2px;
+  width: 24px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--panel);
+  background: var(--ink);
+  border-radius: 4px;
+}
+
+[data-era="2026"] .join {
+  padding: 16px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+}
+
+[data-era="2026"] .join label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--ink-2);
+}
+
+[data-era="2026"] .join input {
+  width: calc(5ch + 1.6em + 34px);
+  padding: 6px 8px 4px 18px;
+  font-family: var(--dot);
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  color: var(--signal);
+  caret-color: var(--signal);
+  background: var(--lcd);
+  border: 0;
+  border-radius: 6px;
+}
+
+[data-era="2026"] .join input::placeholder {
+  color: #3a3a38;
+}
+
+[data-era="2026"] .join-help {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+[data-era="2026"] .join.bad .join-help {
+  color: var(--signal);
+}
+
+/* arsenal: a spec sheet */
+
+[data-era="2026"] .blast-canvas {
+  image-rendering: auto;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+}
+
+[data-era="2026"] .blast figcaption {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+[data-era="2026"] .price li {
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule);
+}
+
+[data-era="2026"] .price li:hover,
+[data-era="2026"] .price li.on {
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: inset 3px 0 0 var(--signal);
+}
+
+[data-era="2026"] .price i,
+[data-era="2026"] .price li:hover i,
+[data-era="2026"] .price li.on i {
+  border-bottom: 1px dotted var(--ink-3);
+}
+
+[data-era="2026"] .price .cost,
+[data-era="2026"] .price li:hover .cost,
+[data-era="2026"] .price li.on .cost {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+[data-era="2026"] .price .blurb,
+[data-era="2026"] .price li:hover .blurb,
+[data-era="2026"] .price li.on .blurb {
+  color: var(--ink-2);
+}
+
+[data-era="2026"] .price kbd {
+  font-size: 11px;
+}
+
+/* keycaps */
+
+[data-era="2026"] kbd {
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 0 3px 0 var(--ink);
+  transform: translateY(-2px);
+}
+
+[data-era="2026"] kbd.down {
+  background: var(--signal);
+  box-shadow: 0 0 0 var(--ink);
+  transform: translateY(1px);
+}
+
+[data-era="2026"] .keys {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+[data-era="2026"] .keys-try {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--signal);
+}
+
+[data-era="2026"] .thru {
+  color: var(--ink-3);
+}
+
+/* footer */
+
+[data-era="2026"] .win-reg pre {
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+[data-era="2026"] .credit {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+[data-era="2026"] .prompt {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+@media (max-width: 400px) {
+  [data-era="2026"] .hud {
+    gap: 10px;
+    padding: 0 10px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+}
+
+@media (max-width: 560px) {
+  [data-era="2026"] .menubar {
+    gap: 2px;
+    padding: 0 10px;
+  }
+
+  [data-era="2026"] .menubar a {
+    padding: 6px 8px;
+  }
+
+  [data-era="2026"] .menubar-snd {
+    margin-left: 6px;
+  }
+
+  [data-era="2026"] .lede {
+    font-size: 40px;
+  }
+
+  [data-era="2026"] .win,
+  [data-era="2026"] .win-gray {
+    padding: 22px 20px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-era="2026"] .btn {
+    transition: none;
   }
 }

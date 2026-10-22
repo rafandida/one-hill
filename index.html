@@ -13,6 +13,7 @@
     <meta name="theme-color" content="#0000AA" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="preload" href="fonts/VT323-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <script src="js/era.js"></script>
     <link rel="stylesheet" href="landing.css" />
     <script>
       // Invite links that land on the front page go straight to the game.
@@ -27,12 +28,16 @@
       <nav aria-label="Page sections">
         <ul>
           <li><a href="play.html"><span class="hot">P</span>lay</a></li>
-          <li><a href="#modes"><span class="hot">M</span>odes</a></li>
-          <li><a href="#online"><span class="hot">O</span>nline</a></li>
+          <li class="menubar-mid"><a href="#modes"><span class="hot">M</span>odes</a></li>
+          <li class="menubar-mid"><a href="#online"><span class="hot">O</span>nline</a></li>
           <li class="menubar-wide"><a href="#arsenal"><span class="hot">A</span>rsenal</a></li>
           <li class="menubar-wide"><a href="#keys"><span class="hot">K</span>eys</a></li>
         </ul>
       </nav>
+      <div class="era-switch" role="group" aria-label="Era">
+        <button type="button" data-era-pick="1990" aria-pressed="true">1990</button>
+        <button type="button" data-era-pick="2026" aria-pressed="false">2026</button>
+      </div>
       <button class="menubar-snd" type="button" aria-pressed="false">SND OFF</button>
     </header>
 
@@ -59,8 +64,9 @@
         <div class="wrap">
           <p class="lede"><span>Up to four tanks.</span> <span>One hill.</span> <em>The wind changes every turn.</em></p>
           <p class="sub">
-            Tank Wars is turn-based artillery in the style of the 1990 DOS classic. Set an angle, set the power, lob a
-            shell over the mountain, and find out whether the wind turned on you.
+            <span class="e90">Tank Wars is turn-based artillery in the style of the 1990 DOS classic.</span>
+            <span class="e26">The 1990 DOS artillery classic, rebuilt for 2026.</span>
+            Set an angle, set the power, lob a shell over the mountain, and find out whether the wind turned on you.
           </p>
           <div class="cta">
             <a class="btn btn-go" href="play.html">PLAY NOW</a>
@@ -76,7 +82,8 @@
         <div class="wrap split split-demo">
           <div class="crt">
             <div class="crt-screen">
-              <img class="crt-poster" src="img/demo.png" alt="" width="1280" height="800" />
+              <img class="crt-poster e90" src="img/demo.png" alt="" width="1280" height="800" loading="lazy" />
+              <img class="crt-poster e26" src="img/demo-2026.jpg" alt="" width="1280" height="800" loading="lazy" />
               <iframe
                 class="crt-live"
                 data-src="play.html?demo"
@@ -87,7 +94,7 @@
               <a class="crt-cover" href="play.html"><span>PRESS START</span></a>
             </div>
             <div class="crt-chin" aria-hidden="true">
-              <span class="crt-badge">VGA</span>
+              <span class="crt-badge"><span class="e90">VGA</span><span class="e26">TW-26</span></span>
               <span class="crt-knobs"><i></i><i></i></span>
               <span class="crt-led"></span>
             </div>
@@ -168,8 +175,8 @@
       <section class="layer layer-4" id="online" aria-labelledby="online-title">
         <div class="wrap split split-online">
           <div class="term" aria-hidden="true">
-            <p class="term-bar">C:\TANKWARS\PLAY.EXE</p>
-            <pre class="term-body"><span class="t-line">C:\TANKWARS&gt; PLAY /ONLINE /HOST</span>
+            <p class="term-bar"><span class="e90">C:\TANKWARS\PLAY.EXE</span><span class="e26">TERMINAL · ONLINE</span></p>
+            <pre class="term-body e90"><span class="t-line">C:\TANKWARS&gt; PLAY /ONLINE /HOST</span>
 <span class="t-line">Opening room ........ <i class="ok">OK</i></span>
 <span class="t-line">INVITE CODE: <i class="code">K7Q4M</i></span>
 <span class="t-line"><i class="p2">P2</i> joined.</span>
@@ -178,6 +185,15 @@
 <span class="t-line">WIND &lt;&lt;&lt; 7    <i class="p2">P2</i> AIMING  0:31</span>
 <span class="t-line"><i class="boom">*BOOM*</i>  <i class="p3">P3</i> -62</span>
 <span class="t-line">C:\TANKWARS&gt; <i class="cursor">_</i></span></pre>
+            <pre class="term-body e26"><span class="t-line">~/tankwars $ tankwars host --online</span>
+<span class="t-line">Opening room ........ <i class="ok">ok</i></span>
+<span class="t-line">Invite code  <i class="code">K7Q4M</i></span>
+<span class="t-line"><i class="p2">p2</i> joined</span>
+<span class="t-line"><i class="p3">p3</i> joined</span>
+<span class="t-line"><i class="p4">windmaster</i> took seat 4</span>
+<span class="t-line">wind ◂◂◂ 7    <i class="p2">p2</i> aiming  0:31</span>
+<span class="t-line"><i class="boom">boom</i>  <i class="p3">p3</i> −62</span>
+<span class="t-line">~/tankwars $ <i class="cursor">▍</i></span></pre>
           </div>
           <div class="win">
             <p class="win-title">ONLINE</p>
@@ -273,12 +289,19 @@
     <footer class="layer bedrock">
       <div class="wrap">
         <div class="win win-gray win-reg">
-          <p class="win-title">REGISTER.TXT</p>
-          <pre>TANK WARS is free. There is nothing to register.
+          <p class="win-title"><span class="e90">REGISTER.TXT</span><span class="e26">PRICING</span></p>
+          <pre class="e90">TANK WARS is free. There is nothing to register.
 
 Registration fee ...... $0.00
 Cheques payable to .... nobody
 Mail to ............... nowhere
+
+Send a friend an invite code instead.</pre>
+          <pre class="e26">Tank Wars is free. Still. Even in 2026.
+
+Subscription .......... $0.00/mo
+Battle pass ........... no
+Loot boxes ............ no (shoot the crates)
 
 Send a friend an invite code instead.</pre>
         </div>
@@ -288,7 +311,7 @@ Send a friend an invite code instead.</pre>
           Made by <a href="https://culi.app">culi.app</a> ·
           <a href="https://github.com/rafandida/90-s-Tank-War">Source on GitHub</a>
         </p>
-        <p class="prompt" aria-hidden="true">C:\TANKWARS&gt;<span class="cursor">_</span></p>
+        <p class="prompt" aria-hidden="true"><span class="e90">C:\TANKWARS&gt;</span><span class="e26">~/tankwars $ </span><span class="cursor">_</span></p>
       </div>
     </footer>
 

@@ -4,6 +4,27 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Doto";
+  src: url("fonts/Doto-Variable.woff2") format("woff2");
+  font-weight: 400 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("fonts/IBMPlexMono-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
@@ -65,8 +86,32 @@ body {
   outline: none;
 }
 
-#full {
+.era-switch {
+  display: flex;
   margin-left: auto;
+  border: 2px solid #000000;
+}
+
+.era-switch button {
+  padding: 1px 8px 0;
+  font: inherit;
+  color: #000000;
+  background: #aaaaaa;
+  border: 0;
+  cursor: pointer;
+}
+
+.era-switch button:hover {
+  background: #00aa00;
+}
+
+.era-switch button[aria-pressed="true"] {
+  color: #ffff55;
+  background: #0000aa;
+}
+
+#full {
+  margin-left: 10px;
   padding: 3px 10px 2px;
   font: inherit;
   color: #55ffff;
@@ -139,6 +184,11 @@ body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #000000;
+}
+
+/* The game takes keys at the window; a focus ring on the screen itself is just noise. */
+#game:focus {
+  outline: none;
 }
 
 #monitor::after {
@@ -326,4 +376,211 @@ body.demo #bar {
 
 .share-foot button {
   background: #aaaaaa;
+}
+
+/* ===================================================================== 2026
+ * The play page as a handheld unit: warm-gray housing, black ink, one signal
+ * orange, keys that press down. The canvas itself is redrawn by js/game.js.
+ */
+
+[data-era="2026"] body {
+  color: #5f5c56;
+  background: #e9e7e2;
+}
+
+[data-era="2026"] #bar {
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: #111111;
+  background: #f4f3ef;
+  border-bottom: 1px solid #111111;
+  box-shadow: none;
+}
+
+[data-era="2026"] #bar a {
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+[data-era="2026"] #bar a:hover,
+[data-era="2026"] #bar a:focus-visible {
+  color: #f4f3ef;
+  background: #111111;
+}
+
+/* Keys with status LEDs, same as the front page's menu bar. */
+[data-era="2026"] .era-switch {
+  gap: 4px;
+  border: 0;
+}
+
+[data-era="2026"] .era-switch button,
+[data-era="2026"] #full {
+  position: relative;
+  padding: 5px 10px 4px 22px;
+  font: inherit;
+  font-size: 11px;
+  color: #111111;
+  background: #f4f3ef;
+  border: 1px solid #111111;
+  border-radius: 6px;
+  box-shadow: 0 2px 0 #111111;
+}
+
+[data-era="2026"] .era-switch button::before,
+[data-era="2026"] #full::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  background: #9a968e;
+  border-radius: 50%;
+}
+
+[data-era="2026"] .era-switch button:hover,
+[data-era="2026"] #full:hover,
+[data-era="2026"] #full:focus-visible {
+  color: #111111;
+  background: #ffffff;
+}
+
+[data-era="2026"] .era-switch button[aria-pressed="true"] {
+  background: #ff4f00;
+  box-shadow: 0 0 0 #111111;
+  transform: translateY(2px);
+}
+
+[data-era="2026"] .era-switch button[aria-pressed="true"]::before,
+[data-era="2026"] #full[aria-pressed="true"]::before {
+  background: #111111;
+}
+
+[data-era="2026"] #monitor {
+  overflow: hidden;
+  border: 1px solid #111111;
+  border-radius: 10px;
+  box-shadow: 0 6px 0 #111111;
+}
+
+[data-era="2026"] #monitor::after {
+  display: none;
+}
+
+[data-era="2026"] #game {
+  image-rendering: auto;
+}
+
+[data-era="2026"] body.demo #monitor {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+[data-era="2026"] #hint {
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #9a968e;
+}
+
+[data-era="2026"] #hint a {
+  color: #111111;
+  text-decoration-color: #ff4f00;
+}
+
+[data-era="2026"] .share {
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: #5f5c56;
+  background: #f4f3ef;
+  border: 1px solid #111111;
+  border-radius: 10px;
+  box-shadow: 0 6px 0 #111111;
+}
+
+[data-era="2026"] .share::backdrop {
+  background: rgba(233, 231, 226, 0.8);
+}
+
+[data-era="2026"] .share::before {
+  display: none;
+}
+
+[data-era="2026"] .share-title {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #f4f3ef;
+  background: #111111;
+  border-radius: 4px;
+  transform: none;
+}
+
+[data-era="2026"] .share-title::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: #ff4f00;
+  border-radius: 50%;
+}
+
+[data-era="2026"] .share-card {
+  border: 1px solid #111111;
+  border-radius: 6px;
+}
+
+[data-era="2026"] .share-text,
+[data-era="2026"] .share-links {
+  color: #111111;
+}
+
+[data-era="2026"] .share button {
+  padding: 8px 14px 7px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #111111;
+  background: #ff4f00;
+  border: 1px solid #111111;
+  border-radius: 6px;
+  box-shadow: 0 3px 0 #111111;
+}
+
+[data-era="2026"] .share button:hover {
+  background: #ff6a26;
+}
+
+[data-era="2026"] .share button:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 #111111;
+}
+
+[data-era="2026"] .share button:focus-visible,
+[data-era="2026"] .share a:focus-visible {
+  outline: 2px solid #ff4f00;
+}
+
+[data-era="2026"] .share-foot {
+  border-top: 1px solid rgba(17, 17, 17, 0.16);
+}
+
+[data-era="2026"] .share-foot button {
+  background: #f4f3ef;
+}
+
+[data-era="2026"] .share-links a {
+  color: #111111;
+  text-decoration-color: #ff4f00;
+}
+
+[data-era="2026"] .share-note {
+  color: #00875a;
 }
