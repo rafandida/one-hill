@@ -259,6 +259,18 @@ Everything is static: upload the folder to any host that serves HTTPS (GitHub Pa
 
 The search and sharing tags assume the site lives at **https://onehill.app/**. If it goes somewhere else, replace that address in `index.html` and `play.html` (canonical link, `og:url`, `og:image`, and the JSON-LD block on the front page), `sitemap.xml` and `robots.txt`. Then submit the sitemap in Google Search Console and Bing Webmaster Tools.
 
+### Analytics events
+
+Both pages load Google Analytics (`G-55PL2Q7BF8`), except the attract-mode game embedded on the front page. Besides page views, the game sends these events through `track()` in `js/game.js`:
+
+| Event | When | Parameters |
+| --- | --- | --- |
+| `daily_start` | a Daily Hill opens | `daily_number`, `practice` |
+| `daily_finish` | a Daily Hill ends: taken, lost, or left after a shot (a run left by closing the tab is reported on the next visit) | `daily_number`, `result` (`won` / `lost` / `left`), `shots`, `practice`, `streak` |
+| `share` | a share button works, or a network link is clicked | `method` (`native`, `save_image`, `copy_image`, `copy_text`, `x`, `facebook`, `whatsapp`, `reddit`), `content_type` (`daily` / `series`), `item_id` (`daily-N` or `series`) |
+
+To report on the custom parameters (`daily_number`, `result`, `shots`, `practice`, `streak`), register each one as an event-scoped custom dimension (or a custom metric, for `shots` and `streak`) under **Admin → Custom definitions**. `share`'s parameters are standard and work without that.
+
 ## Project layout
 
 ```
