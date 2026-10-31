@@ -368,6 +368,29 @@
     },
   };
 
+  /**
+   * A Google Analytics event. play.html defines gtag (and only loads the tag
+   * outside attract mode); without it this does nothing.
+   */
+  function track(name, params) {
+    if (typeof window.gtag !== "function") return;
+    try {
+      window.gtag("event", name, params || {});
+    } catch (e) {
+      /* analytics never gets to break the game */
+    }
+  }
+
+  function trackDailyEnd(day, result, marks, practice, streak) {
+    track("daily_finish", {
+      daily_number: day,
+      result: result,
+      shots: marks.length,
+      practice: practice,
+      streak: streak,
+    });
+  }
+
   function dailyVerdict(rec) {
     const n = rec.marks.length;
     const shots = n + (n === 1 ? " SHOT" : " SHOTS");
@@ -1476,7 +1499,11 @@
   /** What the title screen shows for today. Also settles a run that was left unfinished. */
   Game.prototype.refreshDailyInfo = function () {
     const day = dailyNumber();
+    const before = DailyStore.load().last;
     const stats = DailyStore.settleAbandoned();
+    if (before && !before.done && stats.last && stats.last.done) {
+      trackDailyEnd(before.day, "left", before.marks || "", false, 0);
+    }
     this.dailyInfo = { day: day, kit: dailyKit(day), stats: stats, rec: DailyStore.today(stats, day) };
     return this.dailyInfo;
   };
@@ -1496,6 +1523,7 @@
       result: info.rec,
       stats: info.stats,
     };
+    track("daily_start", { daily_number: info.day, practice: !!info.rec });
   };
 
   Game.prototype.dailyFired = function () {
@@ -1843,9 +1871,11 @@
     const won = !!(this.winner && this.winner.human);
     if (d.practice) {
       d.run = { won: won, left: false, marks: d.marks };
+      trackDailyEnd(d.day, won ? "won" : "lost", d.marks, true, 0);
       return;
     }
     d.stats = DailyStore.finish(d.day, won, false, d.marks);
+    trackDailyEnd(d.day, won ? "won" : "lost", d.marks, false, DailyStore.liveStreak(d.stats, d.day));
     d.result = { day: d.day, done: true, won: won, left: false, marks: d.marks };
   };
 
@@ -2239,6 +2269,8 @@
       const d = this.daily;
       // Walking off after your first shot counts as a loss.
       if (this.dailyShot) d.marks += "m";
+      const unfinished = d.practice ? !d.run && d.marks.length > 0 : d.started && !d.result;
+      if (unfinished) trackDailyEnd(d.day, "left", d.marks, d.practice, 0);
       if (!d.practice && d.started && !d.result) DailyStore.finish(d.day, false, true, d.marks);
       this.daily = null;
       this.dailyShot = null;
@@ -5006,6 +5038,8 @@
       d.addEventListener("click", function (e) {
         const b = e.target.closest("[data-act]");
         if (b) self.act(b.dataset.act);
+        const net = e.target.closest("[data-net]");
+        if (net) self.track(net.dataset.net);
       });
       d.addEventListener("close", function () {
         flushTaps();
@@ -5016,6 +5050,11 @@
 
     note: function (text) {
       this.dialog.querySelector(".share-note").textContent = text;
+    },
+
+    /** One share action (a button that worked, or a link to a network) for analytics. */
+    track: function (method) {
+      track("share", { method: method, content_type: this.kind, item_id: this.itemId });
     },
 
     open: function (game) {
@@ -5033,6 +5072,8 @@
       this.full = full;
       this.url = url;
       this.fileName = info.file || "one-hill-series.png";
+      this.kind = info.marks ? "daily" : "series";
+      this.itemId = info.marks ? "daily-" + game.daily.day : this.kind;
       d.querySelector(".share-title").textContent = info.tab || "SERIES OVER";
       this.blob = null;
       this.file = null;
@@ -5092,6 +5133,7 @@
         navigator.clipboard.writeText(this.full).then(
           function () {
             self.note("COPIED. PASTE IT ANYWHERE.");
+            self.track("copy_text");
           },
           function () {
             self.note("COPY BLOCKED. SELECT THE TEXT ABOVE INSTEAD.");
@@ -5107,6 +5149,7 @@
         navigator.share({ files: [this.file], title: "One Hill", text: this.full }).then(
           function () {
             self.note("SHARED. GOOD SHOOTING.");
+            self.track("native");
           },
           function (err) {
             if (!err || err.name !== "AbortError") self.note("SHARING FAILED. SAVE THE IMAGE INSTEAD.");
@@ -5120,10 +5163,12 @@
         a.click();
         a.remove();
         this.note("SAVED AS " + this.fileName);
+        this.track("save_image");
       } else if (what === "copy") {
         navigator.clipboard.write([new ClipboardItem({ "image/png": this.blob })]).then(
           function () {
             self.note("IMAGE COPIED. PASTE IT INTO YOUR POST.");
+            self.track("copy_image");
           },
           function () {
             self.note("COPY BLOCKED. SAVE THE IMAGE INSTEAD.");
