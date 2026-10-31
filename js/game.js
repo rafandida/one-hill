@@ -217,8 +217,163 @@
     return v < a ? a : v > b ? b : v;
   }
 
-  function irand(a, b) {
-    return a + Math.floor(Math.random() * (b - a + 1));
+  function irand(a, b, rng) {
+    return a + Math.floor((rng || Math.random)() * (b - a + 1));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Daily Hill — one hill a day, the same for everyone: map, wind, crates, the
+  // CPU's aim and the bonus kit all come from seeded streams keyed on the date.
+  // Score is how many shots it takes you to win. Your first try counts.
+  // ---------------------------------------------------------------------------
+  const DAILY_EPOCH = Date.UTC(2026, 10, 1); // Daily Hill #1
+  const DAILY_LEVEL = 1; // LOBBER
+  const DAILY_KEY = "onehill-daily-v1";
+  const DAILY_KITS = [
+    { id: "nuke", label: "+1 NUKE" },
+    { id: "mirv", label: "+1 MIRV" },
+    { id: "bomb", label: "+2 HE BOMBS" },
+    { id: "guide", label: "+2 GUIDANCE" },
+    { id: "shield", label: "+1 SHIELD" },
+    { id: "dirt", label: "+2 DIRT" },
+  ];
+  // Shot marks: miss, close, hit, kill. The canvas draws them as squares.
+  const MARK_EMOJI = { m: "⬛", c: "⬜", h: "🟨", k: "💥" };
+
+  /** mulberry32: a small, fast seeded generator. */
+  function seededRng(seed) {
+    let s = seed >>> 0;
+    return function () {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hashString(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  /** Today's hill number, by the player's own calendar (like a daily puzzle). */
+  function dailyNumber(now) {
+    const d = now || new Date();
+    return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - DAILY_EPOCH) / 86400000) + 1;
+  }
+
+  /** Time left until the next hill, as H:MM:SS. */
+  function dailyCountdown() {
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const s = Math.max(0, Math.floor((next - now) / 1000));
+    const mm = String(Math.floor(s / 60) % 60).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return Math.floor(s / 3600) + ":" + mm + ":" + ss;
+  }
+
+  function dailyRngs(day) {
+    const out = {};
+    ["map", "wind", "crate", "cpu"].forEach(function (k) {
+      out[k] = seededRng(hashString("one-hill/daily/" + day + "/" + k));
+    });
+    return out;
+  }
+
+  /** Today's bonus round for your tank. CPU tanks don't get one. */
+  function dailyKit(day) {
+    const rng = seededRng(hashString("one-hill/daily/" + day + "/kit"));
+    return DAILY_KITS[irand(0, DAILY_KITS.length - 1, rng)];
+  }
+
+  function applyKit(roster, id) {
+    if (id === "guide") roster.guidance += 2;
+    else if (id === "shield") roster.shields += 1;
+    else if (id === "bomb") roster.ammo[weaponIndex("bomb")] += 2;
+    else if (id === "dirt") roster.ammo[weaponIndex("dirt")] += 2;
+    else roster.ammo[weaponIndex(id)] += 1;
+  }
+
+  /** Stats live in this browser only. Storage can be missing or blocked. */
+  const DailyStore = {
+    load: function () {
+      let s = null;
+      try {
+        s = JSON.parse(localStorage.getItem(DAILY_KEY) || "null");
+      } catch (e) {
+        s = null;
+      }
+      if (!s || typeof s !== "object") s = {};
+      return {
+        last: s.last || null,
+        played: s.played || 0,
+        wins: s.wins || 0,
+        streak: s.streak || 0,
+        best: s.best || 0,
+        lastWonDay: s.lastWonDay || 0,
+      };
+    },
+    save: function (s) {
+      try {
+        localStorage.setItem(DAILY_KEY, JSON.stringify(s));
+      } catch (e) {
+        /* private window or storage off: the result just isn't kept */
+      }
+    },
+    /** The run in progress, written on your first shot so a reload can't reroll it. */
+    begin: function (day, marks) {
+      const s = this.load();
+      s.last = { day: day, done: false, won: false, left: false, marks: marks };
+      this.save(s);
+    },
+    progress: function (day, marks) {
+      const s = this.load();
+      if (!s.last || s.last.day !== day || s.last.done) return;
+      s.last.marks = marks;
+      this.save(s);
+    },
+    finish: function (day, won, left, marks) {
+      const s = this.load();
+      if (s.last && s.last.day === day && s.last.done) return s;
+      s.last = { day: day, done: true, won: won, left: left, marks: marks };
+      s.played++;
+      if (won) {
+        s.wins++;
+        s.streak = s.lastWonDay === day - 1 ? s.streak + 1 : 1;
+        s.lastWonDay = day;
+        s.best = Math.max(s.best, s.streak);
+      } else {
+        s.streak = 0;
+      }
+      this.save(s);
+      return s;
+    },
+    /** A run left unfinished (closed tab, reload, ESC) counts as a loss. */
+    settleAbandoned: function () {
+      const s = this.load();
+      if (s.last && !s.last.done) return this.finish(s.last.day, false, true, s.last.marks || "");
+      return s;
+    },
+    /** A win streak only survives if yesterday (or today) was won. */
+    liveStreak: function (s, today) {
+      return s.lastWonDay >= today - 1 ? s.streak : 0;
+    },
+    today: function (s, today) {
+      return s.last && s.last.day === today && s.last.done ? s.last : null;
+    },
+  };
+
+  function dailyVerdict(rec) {
+    const n = rec.marks.length;
+    const shots = n + (n === 1 ? " SHOT" : " SHOTS");
+    if (rec.won) return "TAKEN IN " + shots;
+    if (rec.left) return "LEFT AFTER " + shots;
+    return "LOST AFTER " + shots;
   }
 
   /** Layered sines + a few control peaks — works at any width, always hilly. */
@@ -828,6 +983,7 @@
         const res = hurt(game, t, dmg, owner, direct);
         if (res === "hit") punched = true;
       } else if (d < reach + 40) {
+        if (game.dailyShot && !t.human) game.dailyShot.close = true;
         callout(game, t.x, t.y - 24, "CLOSE!", C.yellow);
         addShake(game, 2.4);
       }
@@ -934,21 +1090,22 @@
 
   function spawnCrate(game) {
     if (game.crates.length >= 2) return;
-    let x = irand(36, W - 36);
+    const rng = game.rng("crate");
+    let x = irand(36, W - 36, rng);
     for (let tries = 0; tries < 8; tries++) {
       let clear = true;
       for (let i = 0; i < game.tanks.length; i++) {
         if (Math.abs(game.tanks[i].x - x) < 28) clear = false;
       }
       if (clear) break;
-      x = irand(36, W - 36);
+      x = irand(36, W - 36, rng);
     }
     if (game.water && x > game.water.x0 - 8 && x < game.water.x1 + 8) return;
     game.crates.push({
       x: x,
       y: PLAY_TOP + 6,
       vy: 16,
-      kind: CRATE_KINDS[irand(0, CRATE_KINDS.length - 1)],
+      kind: CRATE_KINDS[irand(0, CRATE_KINDS.length - 1, rng)],
       grounded: false,
       blink: 0,
     });
@@ -1174,7 +1331,8 @@
     }
 
     const diff = game.difficulty;
-    const misread = [0, 1.6, 0.7][diff] * (Math.random() * 2 - 1);
+    const rng = game.rng("cpu");
+    const misread = [0, 1.6, 0.7][diff] * (rng() * 2 - 1);
     const windUse = game.wind * [0.2, 1, 1][diff] + misread;
     const coarse = [6, 4, 3][diff];
     const slopA = [16, 4, 2][diff];
@@ -1206,17 +1364,17 @@
       }
     }
 
-    pick.angle = clamp(pick.angle + irand(-slopA, slopA), 1, 179);
-    pick.power = clamp(pick.power + irand(-slopP, slopP), 10, pMax);
+    pick.angle = clamp(pick.angle + irand(-slopA, slopA, rng), 1, 179);
+    pick.power = clamp(pick.power + irand(-slopP, slopP, rng), 10, pMax);
 
     let w = 0;
     if (diff === 0) {
-      if (Math.random() < 0.2 && tank.ammo[1] > 0) w = 1;
+      if (rng() < 0.2 && tank.ammo[1] > 0) w = 1;
     } else if (pick.err < 40 && tank.ammo[1] > 0) w = 1;
     else if (bestD > 180 && tank.ammo[2] > 0) w = 2;
     else if (tank.ammo[4] > 0 && pick.err < 55) w = 4;
-    else if (tank.ammo[5] > 0 && Math.random() < 0.22) w = 5;
-    else if (pick.err > 70 && tank.ammo[3] > 0 && Math.random() < 0.35) w = 3;
+    else if (tank.ammo[5] > 0 && rng() < 0.22) w = 5;
+    else if (pick.err > 70 && tank.ammo[3] > 0 && rng() < 0.35) w = 3;
     pick.weapon = w;
     return pick;
   }
@@ -1298,12 +1456,78 @@
     this.finalFrameRound = 0;
     this.shareT = 0;
     this.shareBox = null;
+    this.daily = null;
+    this.dailyShot = null;
+    this.dailyInfo = null;
+    this.savedDifficulty = 1;
 
     this.rebuildStars();
   }
 
   Game.prototype.titleRows = function () {
     return this.playMode === "cpu" ? 4 : 3;
+  };
+
+  /** Random numbers for one part of the game: seeded on the Daily Hill, free everywhere else. */
+  Game.prototype.rng = function (stream) {
+    return this.daily ? this.daily.rngs[stream] : Math.random;
+  };
+
+  /** What the title screen shows for today. Also settles a run that was left unfinished. */
+  Game.prototype.refreshDailyInfo = function () {
+    const day = dailyNumber();
+    const stats = DailyStore.settleAbandoned();
+    this.dailyInfo = { day: day, kit: dailyKit(day), stats: stats, rec: DailyStore.today(stats, day) };
+    return this.dailyInfo;
+  };
+
+  Game.prototype.beginDaily = function () {
+    const info = this.refreshDailyInfo();
+    if (!this.daily) this.savedDifficulty = this.difficulty;
+    this.difficulty = DAILY_LEVEL;
+    this.daily = {
+      day: info.day,
+      rngs: dailyRngs(info.day),
+      kit: info.kit,
+      // Already played today: this run is practice and changes nothing.
+      practice: !!info.rec,
+      started: false,
+      marks: "",
+      result: info.rec,
+      stats: info.stats,
+    };
+  };
+
+  Game.prototype.dailyFired = function () {
+    const d = this.daily;
+    const foe = this.tanks.filter(function (t) {
+      return !t.human;
+    })[0];
+    this.dailyShot = { hp: foe ? foe.hp : 0, close: false };
+    if (d.practice) return;
+    // Until it lands, a shell in the air counts as a miss.
+    if (!d.started) {
+      d.started = true;
+      DailyStore.begin(d.day, d.marks + "m");
+    } else {
+      DailyStore.progress(d.day, d.marks + "m");
+    }
+  };
+
+  /** Once your shell (and anything it knocked loose) has settled, mark the shot. */
+  Game.prototype.dailyMark = function () {
+    const d = this.daily;
+    const shot = this.dailyShot;
+    this.dailyShot = null;
+    const foe = this.tanks.filter(function (t) {
+      return !t.human;
+    })[0];
+    let m = "m";
+    if (foe && !foe.alive) m = "k";
+    else if (foe && foe.hp < shot.hp) m = "h";
+    else if (shot.close) m = "c";
+    d.marks += m;
+    if (!d.practice) DailyStore.progress(d.day, d.marks);
   };
 
   Game.prototype.rebuildStars = function () {
@@ -1335,6 +1559,9 @@
     } else if (this.net) {
       this.humanCount = this.net.seats.length;
       this.tankCount = Math.min(MAX_TANKS, this.humanCount + this.netCpu);
+    } else if (this.playMode === "daily") {
+      this.tankCount = 2;
+      this.humanCount = 1;
     } else if (this.playMode === "cpu") {
       this.tankCount = 1 + this.cpuCount;
       this.humanCount = 1;
@@ -1346,6 +1573,7 @@
 
   Game.prototype.startSeries = function () {
     if (this.net) this.hostSeatSeries();
+    if (this.playMode === "daily" && !this.net && !this.demo) this.beginDaily();
     this.applyModeCounts();
     const n = this.tankCount;
     const humans = this.humanCount;
@@ -1374,6 +1602,7 @@
         dmg: 0,
       });
     }
+    if (this.daily) applyKit(this.roster[0], this.daily.kit.id);
     this.round = 1;
     this.mapIndex = 0;
     this.seriesOver = false;
@@ -1381,7 +1610,7 @@
     this.newBattle();
   };
 
-  function slotX(i, n, kind) {
+  function slotX(i, n, kind, rng) {
     if (kind === "water") {
       const leftN = Math.ceil(n / 2);
       if (i < leftN) return Math.round(28 + ((i + 0.5) * 170) / leftN);
@@ -1390,7 +1619,7 @@
       return Math.round(436 + ((j + 0.5) * 160) / rightN);
     }
     const margin = kind === "canyon" ? 34 : 48;
-    return clamp(Math.round(margin + ((W - margin * 2) * (i + 0.5)) / n + irand(-6, 6)), 24, W - 24);
+    return clamp(Math.round(margin + ((W - margin * 2) * (i + 0.5)) / n + irand(-6, 6, rng)), 24, W - 24);
   }
 
   Game.prototype.newBattle = function () {
@@ -1398,14 +1627,19 @@
       this.startSeries();
       return;
     }
-    const kind = MAPS[this.mapIndex % MAPS.length];
+    const rng = this.rng("map");
+    const kind = this.daily ? MAPS[irand(0, MAPS.length - 1, rng)] : MAPS[this.mapIndex % MAPS.length];
     this.mapIndex++;
-    const map = generateMap(kind, Math.random);
-    let wind = irand(-9, 9);
-    if (Math.abs(wind) < 2) wind = irand(0, 1) ? 2 : -2;
+    const map = generateMap(kind, rng);
+    let wind = irand(-9, 9, rng);
+    if (Math.abs(wind) < 2) wind = irand(0, 1, rng) ? 2 : -2;
     const xs = [];
-    for (let i = 0; i < this.roster.length; i++) xs.push(slotX(i, this.roster.length, kind));
+    for (let i = 0; i < this.roster.length; i++) xs.push(slotX(i, this.roster.length, kind, rng));
     this.layBattle(kind, map, wind, xs);
+    if (this.daily) {
+      this.banner = "DAILY HILL #" + this.daily.day;
+      this.bannerT = 1.3;
+    }
     if (this.net) this.netSend({ t: "battle", s: this.battleSnapshot() });
   };
 
@@ -1595,14 +1829,29 @@
     }
     const lead = leaderState(this.roster);
     this.seriesOver = lead.best >= WINS_TO_TAKE || (this.round >= 5 && lead.count === 1) || this.round >= 7;
+    if (this.daily) this.finishDaily();
     this.mode = "victory";
     this.playVictoryJingle();
     if (this.net) this.hostVictory();
-    if (this.seriesOver) this.queueShare();
+    if (this.seriesOver && !(this.daily && this.daily.practice)) this.queueShare();
+  };
+
+  /** The Daily Hill is a single hill: whoever holds it, that's the result. */
+  Game.prototype.finishDaily = function () {
+    const d = this.daily;
+    this.seriesOver = true;
+    const won = !!(this.winner && this.winner.human);
+    if (d.practice) {
+      d.run = { won: won, left: false, marks: d.marks };
+      return;
+    }
+    d.stats = DailyStore.finish(d.day, won, false, d.marks);
+    d.result = { day: d.day, done: true, won: won, left: false, marks: d.marks };
   };
 
   Game.prototype.leaveVictory = function () {
-    if (!this.seriesOver) this.beginShop();
+    if (this.daily) this.toTitle();
+    else if (!this.seriesOver) this.beginShop();
     else if (!this.isGuest()) this.startSeries();
   };
 
@@ -1679,14 +1928,15 @@
     }
     // Shift hard enough that last turn's winning aim usually misses now.
     const before = this.wind;
-    if (Math.random() < 0.25) this.wind = irand(-12, 12);
-    else this.wind = clamp(this.wind + irand(-5, 5), -12, 12);
+    const windRng = this.rng("wind");
+    if (windRng() < 0.25) this.wind = irand(-12, 12, windRng);
+    else this.wind = clamp(this.wind + irand(-5, 5, windRng), -12, 12);
     if (Math.abs(this.wind) < 2) this.wind = this.wind < 0 ? -2 : 2;
     const windShift = Math.abs(this.wind - before) >= 5;
     this.windShift = windShift;
     if (Math.abs(this.wind) >= 4) Sfx.whoosh(this.wind);
 
-    if (this.pendingCrate || (this.turnNumber > 0 && this.turnNumber % 3 === 0 && Math.random() < 0.65)) {
+    if (this.pendingCrate || (this.turnNumber > 0 && this.turnNumber % 3 === 0 && this.rng("crate")() < 0.65)) {
       spawnCrate(this);
       this.pendingCrate = false;
     }
@@ -1788,6 +2038,7 @@
     if (guide) tank.guidance--;
     const shooter = this.roster && this.roster[tank.id];
     if (shooter) shooter.shots = (shooter.shots || 0) + 1;
+    if (this.daily && tank.human) this.dailyFired();
     if (this.net && !remote) {
       this.netSend({ t: "fire", seq: this.turnSeq, id: tank.id, a: tank.angle, p: tank.power, w: tank.weapon, g: guide });
     }
@@ -1920,9 +2171,11 @@
 
   Game.prototype.nudgeTitle = function (dir) {
     if (this.titleRow === 0) {
-      const modes = window.TankNet ? ["cpu", "hotseat", "online"] : ["cpu", "hotseat"];
+      const modes = window.TankNet ? ["cpu", "daily", "hotseat", "online"] : ["cpu", "daily", "hotseat"];
       const i = modes.indexOf(this.playMode);
       this.playMode = modes[(i + dir + modes.length) % modes.length];
+    } else if (this.titleRow === 1 && this.playMode === "daily") {
+      return;
     } else if (this.titleRow === 1) {
       if (this.playMode === "cpu") {
         this.difficulty = (this.difficulty + dir + 3) % 3;
@@ -1982,6 +2235,15 @@
 
   Game.prototype.toTitle = function () {
     if (this.net) this.leaveOnline();
+    if (this.daily) {
+      const d = this.daily;
+      // Walking off after your first shot counts as a loss.
+      if (this.dailyShot) d.marks += "m";
+      if (!d.practice && d.started && !d.result) DailyStore.finish(d.day, false, true, d.marks);
+      this.daily = null;
+      this.dailyShot = null;
+      this.difficulty = this.savedDifficulty;
+    }
     this.roster = null;
     this.mode = "title";
     flushTaps();
@@ -2089,7 +2351,8 @@
           this.shareT -= dt;
           if (this.shareT <= 0) Share.open(this);
         }
-        if (this.seriesOver && (consume("s") || consume("S"))) Share.open(this);
+        const canShare = this.seriesOver && !(this.daily && this.daily.practice);
+        if (canShare && (consume("s") || consume("S"))) Share.open(this);
         else if (consume("Enter") || consume(" ") || consume("Spacebar")) this.leaveVictory();
       }
       return;
@@ -2192,6 +2455,7 @@
       const busy = this.settleTanks(dt);
       stepShots(this, dt);
       if (!busy && this.shots.length === 0 && this.explosions.length === 0) {
+        if (this.dailyShot) this.dailyMark();
         const living = this.living();
         if (this.isGuest()) {
           this.mode = "netwait";
@@ -3618,6 +3882,10 @@
     for (let i = 0; i < this.roster.length; i++) status += this.roster[i].wins + (i < this.roster.length - 1 ? "-" : "");
     const purse = this.roster[tank.id];
     status += "  $" + (purse ? purse.cash : 0);
+    if (this.daily) {
+      status = (this.daily.practice ? "PRACTICE #" : "DAILY #") + this.daily.day + "  " + MAP_LABEL[this.mapKind];
+      status += "  SHOTS " + (this.roster[0].shots || 0);
+    }
     status += "  SH" + tank.shields + " GD" + tank.guidance;
     ctx.fillStyle = C.gray;
     ctx.fillText(status, W - 6, H - 10);
@@ -3723,9 +3991,12 @@
     ctx.font = font(11);
     ctx.fillText("Inspired by Kenny Morse, 1990  ·  original graphics", W / 2, 124);
 
-    const modeVal = { cpu: "1P vs CPU", hotseat: "HOTSEAT", online: "ONLINE" }[this.playMode];
+    const modeVal = { cpu: "1P vs CPU", daily: "DAILY HILL", hotseat: "HOTSEAT", online: "ONLINE" }[this.playMode];
+    const daily = this.playMode === "daily" ? this.titleDaily() : null;
     let row1;
-    if (this.playMode === "cpu") {
+    if (daily) {
+      row1 = { label: "TODAY", value: "#" + daily.day, hint: daily.rec ? dailyVerdict(daily.rec) : "not played yet" };
+    } else if (this.playMode === "cpu") {
       row1 = { label: "DIFFICULTY", value: DIFF_LABELS[this.difficulty], hint: DIFF_NAMES[this.difficulty] };
     } else if (this.playMode === "online") {
       const hosting = this.onlineRole === "host";
@@ -3735,6 +4006,7 @@
     }
     let modeHint = "2–4 humans";
     if (this.playMode === "online") modeHint = "invite friends";
+    else if (daily) modeHint = "same for everyone";
     else if (this.playMode === "cpu") modeHint = this.cpuCount === 1 ? "you vs AI" : "free-for-all";
     const rows = [{ label: "MODE", value: modeVal, hint: modeHint }, row1];
     if (this.playMode === "cpu") {
@@ -3764,6 +4036,10 @@
     ctx.font = font(12);
     ctx.textAlign = "center";
     ctx.fillText("← → change    ↑ ↓ select row    ENTER start    ESC home", W / 2, 258);
+    if (daily) {
+      this.drawDailyTitleNotes(ctx, daily);
+      return;
+    }
     ctx.fillStyle = C.gray;
     ctx.font = font(11);
     ctx.fillText("Drag to aim. A short arc is free.  A clean hit ends a tank.", W / 2, 278);
@@ -3772,7 +4048,122 @@
     ctx.fillText("Kills pay. Shoot crates for loot. Water swallows shells.", W / 2, 322);
   };
 
+  /** Today's info for the title screen, refreshed when the date rolls over. */
+  Game.prototype.titleDaily = function () {
+    if (!this.dailyInfo || this.dailyInfo.day !== dailyNumber()) this.refreshDailyInfo();
+    return this.dailyInfo;
+  };
+
+  Game.prototype.drawDailyTitleNotes = function (ctx, daily) {
+    const stats = daily.stats;
+    ctx.fillStyle = C.gray;
+    ctx.font = font(11);
+    ctx.fillText("One hill a day. Same map, wind and kit for everyone. Fewest shots wins.", W / 2, 278);
+    if (daily.rec) {
+      ctx.fillText("Played. ENTER replays it as practice.  Next hill in " + dailyCountdown(), W / 2, 298);
+    } else {
+      ctx.fillText("You vs " + DIFF_NAMES[DAILY_LEVEL] + ".  Today's kit: " + daily.kit.label + ".", W / 2, 298);
+    }
+    ctx.fillStyle = C.dgray;
+    if (stats.played) {
+      ctx.fillText(
+        "PLAYED " + stats.played + "   WON " + stats.wins + "   STREAK " + DailyStore.liveStreak(stats, daily.day) + "   BEST " + stats.best,
+        W / 2,
+        322
+      );
+    } else {
+      ctx.fillText("Your first try counts. Leaving after a shot is a loss.", W / 2, 322);
+    }
+  };
+
+  /** A row of shot marks as squares: miss, close, hit, kill. */
+  function drawMarks(ctx, marks, cx, cy, size) {
+    const gap = Math.round(size / 3);
+    const n = marks.length;
+    const total = n * size + (n - 1) * gap;
+    let x = cx - total / 2;
+    for (let i = 0; i < n; i++) {
+      const m = marks[i];
+      ctx.fillStyle = m === "k" ? C.lred : m === "h" ? C.yellow : m === "c" ? C.gray : C.dgray;
+      if (MODERN) {
+        roundPath(ctx, x, cy - size / 2, size, size, size / 5);
+        ctx.fill();
+      } else {
+        ctx.fillRect(x, cy - size / 2, size, size);
+      }
+      if (m === "k") {
+        ctx.fillStyle = MODERN ? PAPER : C.white;
+        ctx.fillRect(x + size * 0.3, cy - size * 0.2, size * 0.4, size * 0.4);
+      }
+      x += size + gap;
+    }
+  }
+
+  Game.prototype.drawDailyVictory = function (ctx) {
+    const d = this.daily;
+    const run = d.practice ? d.run : d.result;
+    if (!run) return;
+    const tall = d.practice ? 206 : 236;
+    const top = Math.round(200 - tall / 2);
+    if (MODERN) {
+      panel(ctx, 90, top, 460, tall, 8);
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,0.62)";
+      ctx.fillRect(90, top, 460, tall);
+      ctx.strokeStyle = C.yellow;
+      ctx.strokeRect(94, top + 4, 452, tall - 8);
+    }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = font(13, true);
+    ctx.fillStyle = C.gray;
+    ctx.fillText((d.practice ? "PRACTICE · DAILY HILL #" : "DAILY HILL #") + d.day, W / 2, top + 24);
+    ctx.font = font(26, true);
+    ctx.fillStyle = run.won ? this.tanks[0].color : C.gray;
+    ctx.fillText(run.won ? dailyVerdict(run) : DIFF_NAMES[DAILY_LEVEL] + " HOLDS THE HILL", W / 2, top + 54);
+    const size = run.marks.length > 16 ? 10 : 14;
+    drawMarks(ctx, run.marks, W / 2, top + 88, size);
+    ctx.font = font(12);
+    let y = top + 116;
+    if (d.practice) {
+      ctx.fillStyle = C.white;
+      ctx.fillText("Today's score stays: " + dailyVerdict(d.result).toLowerCase(), W / 2, y);
+    } else {
+      const s = d.stats;
+      ctx.fillStyle = C.white;
+      ctx.fillText(
+        "PLAYED " + s.played + "   WON " + s.wins + "   STREAK " + DailyStore.liveStreak(s, d.day) + "   BEST " + s.best,
+        W / 2,
+        y
+      );
+    }
+    y += 20;
+    ctx.fillStyle = C.gray;
+    ctx.fillText("NEXT HILL IN " + dailyCountdown(), W / 2, y);
+    this.shareBox = null;
+    if (!d.practice) {
+      const box = { x: W / 2 - 74, y: top + tall - 74, w: 148, h: 24 };
+      if (MODERN) {
+        key(ctx, box.x, box.y, box.w, box.h, C.yellow, false);
+      } else {
+        ctx.fillStyle = C.lgreen;
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+      }
+      ctx.fillStyle = C.black;
+      ctx.font = font(13, true);
+      ctx.fillText("SHARE RESULT", W / 2, box.y + box.h / 2 + 1);
+      this.shareBox = box;
+    }
+    ctx.fillStyle = C.white;
+    ctx.font = font(13);
+    ctx.fillText(d.practice ? "ENTER  title" : "ENTER  title   S  share", W / 2, top + tall - 26);
+  };
+
   Game.prototype.drawVictory = function (ctx) {
+    if (this.daily) {
+      this.drawDailyVictory(ctx);
+      return;
+    }
     const extra = this.seriesOver && !this.demo ? 34 : 0;
     const tall = 168 + this.roundLines.length * 16 + extra;
     const top = Math.max(70, 200 - tall / 2);
@@ -4333,6 +4724,7 @@
 
   /** Result, score, and the words to post, told from this screen's player. */
   Game.prototype.shareInfo = function () {
+    if (this.daily && this.daily.result) return this.dailyShareInfo();
     const roster = this.roster;
     const rows = roster.slice().sort(function (a, b) {
       return b.wins - a.wins || (b.kills || 0) - (a.kills || 0) || a.id - b.id;
@@ -4380,6 +4772,37 @@
       headline: headline,
       text: text,
       alt: "One Hill result card: " + headline + ", " + score + ", " + mode + ", over the final shot of the series.",
+    };
+  };
+
+  /** The Daily Hill result: a row of marks people can paste anywhere. */
+  Game.prototype.dailyShareInfo = function () {
+    const d = this.daily;
+    const rec = d.result;
+    const roster = this.roster;
+    const verdict = dailyVerdict(rec);
+    const grid = rec.marks
+      .split("")
+      .map(function (m) {
+        return MARK_EMOJI[m];
+      })
+      .join("");
+    const streak = DailyStore.liveStreak(d.stats, d.day);
+    let line = verdict.charAt(0) + verdict.slice(1).toLowerCase();
+    if (rec.won && streak > 1) line += " · streak " + streak;
+    const base = siteUrl();
+    return {
+      rows: roster.slice(),
+      me: roster[0],
+      score: "",
+      marks: rec.marks,
+      mode: "DAILY HILL #" + d.day,
+      tab: "DAILY HILL",
+      headline: verdict,
+      text: "One Hill · Daily Hill #" + d.day + "\n" + grid + "\n" + line,
+      url: base ? base + "play.html?mode=daily" : "",
+      file: "one-hill-daily-" + d.day + ".png",
+      alt: "One Hill Daily Hill #" + d.day + " result card: " + verdict + ".",
     };
   };
 
@@ -4448,7 +4871,7 @@
     const h = 70 + head.length * 46 + 70 + 34 + info.rows.length * 34 + 22;
     ctx.font = font(20, true);
     ctx.textAlign = "center";
-    const title = " SERIES OVER ";
+    const title = " " + (info.tab || "SERIES OVER") + " ";
     if (MODERN) {
       panel(ctx, x, y, w, h, 14);
       // A black label tab with a status LED, like the front page's windows.
@@ -4487,9 +4910,16 @@
       ctx.fillText(head[i], x + 36, cy);
       cy += 46;
     }
-    ctx.font = font(56, true);
-    ctx.fillStyle = C.white;
-    ctx.fillText(info.score, x + 36, cy + 12);
+    if (info.marks) {
+      const size = info.marks.length > 12 ? 24 : 36;
+      const n = info.marks.length;
+      const span = n * size + (n - 1) * Math.round(size / 3);
+      drawMarks(ctx, info.marks, x + 36 + span / 2, cy + 12, size);
+    } else {
+      ctx.font = font(56, true);
+      ctx.fillStyle = C.white;
+      ctx.fillText(info.score, x + 36, cy + 12);
+    }
     cy += 70;
 
     const cols = [
@@ -4559,6 +4989,7 @@
         '<button type="button" data-act="native" hidden>SHARE…</button>' +
         '<button type="button" data-act="save">SAVE IMAGE</button>' +
         '<button type="button" data-act="copy">COPY IMAGE</button>' +
+        '<button type="button" data-act="copytext" hidden>COPY TEXT</button>' +
         "</div>" +
         '<p class="share-links">POST TO' +
         ' <a data-net="x" target="_blank" rel="noopener">X</a>' +
@@ -4593,13 +5024,16 @@
       const self = this;
       const d = this.dialog;
       const info = game.shareInfo();
-      const url = siteUrl();
-      const full = url ? info.text + " " + url : info.text;
+      const url = info.url !== undefined ? info.url : siteUrl();
+      const full = url ? info.text + (info.marks ? "\n" : " ") + url : info.text;
       game.shareT = 0;
       flushTaps();
       this.game = game;
       this.text = info.text;
+      this.full = full;
       this.url = url;
+      this.fileName = info.file || "one-hill-series.png";
+      d.querySelector(".share-title").textContent = info.tab || "SERIES OVER";
       this.blob = null;
       this.file = null;
       this.note("");
@@ -4608,7 +5042,8 @@
       img.alt = info.alt;
       d.querySelector('[data-act="native"]').hidden = true;
       d.querySelector('[data-act="copy"]').hidden = !(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem);
-      d.querySelector('[data-act="rematch"]').hidden = game.isGuest();
+      d.querySelector('[data-act="rematch"]').hidden = game.isGuest() || !!game.daily;
+      d.querySelector('[data-act="copytext"]').hidden = !(info.marks && navigator.clipboard && navigator.clipboard.writeText);
       const enc = encodeURIComponent;
       const links = {
         x: "https://twitter.com/intent/tweet?text=" + enc(info.text) + (url ? "&url=" + enc(url) : ""),
@@ -4622,14 +5057,14 @@
         anchors[i].hidden = !href;
         if (href) anchors[i].href = href;
       }
-      renderShareCard(game.finalFrame, info, url).toBlob(function (blob) {
+      renderShareCard(game.finalFrame, info, siteUrl()).toBlob(function (blob) {
         if (!blob) return;
         self.blob = blob;
         if (self.imgUrl) URL.revokeObjectURL(self.imgUrl);
         self.imgUrl = URL.createObjectURL(blob);
         img.src = self.imgUrl;
         try {
-          self.file = new File([blob], "one-hill-series.png", { type: "image/png" });
+          self.file = new File([blob], self.fileName, { type: "image/png" });
         } catch (e) {
           self.file = null;
         }
@@ -4653,12 +5088,23 @@
         this.game.leaveVictory();
         return;
       }
+      if (what === "copytext") {
+        navigator.clipboard.writeText(this.full).then(
+          function () {
+            self.note("COPIED. PASTE IT ANYWHERE.");
+          },
+          function () {
+            self.note("COPY BLOCKED. SELECT THE TEXT ABOVE INSTEAD.");
+          }
+        );
+        return;
+      }
       if (!this.blob) {
         this.note("STILL DEVELOPING THE PHOTO…");
         return;
       }
       if (what === "native") {
-        navigator.share({ files: [this.file], title: "One Hill", text: this.url ? this.text + " " + this.url : this.text }).then(
+        navigator.share({ files: [this.file], title: "One Hill", text: this.full }).then(
           function () {
             self.note("SHARED. GOOD SHOOTING.");
           },
@@ -4669,11 +5115,11 @@
       } else if (what === "save") {
         const a = document.createElement("a");
         a.href = this.imgUrl;
-        a.download = "one-hill-series.png";
+        a.download = this.fileName;
         this.dialog.appendChild(a);
         a.click();
         a.remove();
-        this.note("SAVED AS one-hill-series.png");
+        this.note("SAVED AS " + this.fileName);
       } else if (what === "copy") {
         navigator.clipboard.write([new ClipboardItem({ "image/png": this.blob })]).then(
           function () {
@@ -4849,7 +5295,7 @@
   canvas.tabIndex = 0;
 
   // Landing-page shortcuts: ?demo (attract mode for the embedded monitor),
-  // ?host (open a room straight away), ?mode=cpu|hotseat|online (preselect).
+  // ?host (open a room straight away), ?mode=cpu|daily|hotseat|online (preselect).
   const params = new URLSearchParams(location.search);
   if (params.has("demo")) {
     game.demo = true;
@@ -4861,7 +5307,9 @@
   } else {
     canvas.focus();
     const preset = params.get("mode");
-    if (preset === "cpu" || preset === "hotseat" || (preset === "online" && window.TankNet)) game.playMode = preset;
+    if (preset === "cpu" || preset === "daily" || preset === "hotseat" || (preset === "online" && window.TankNet)) {
+      game.playMode = preset;
+    }
     if (params.has("host") && window.TankNet) {
       params.delete("host");
       const rest = params.toString();
