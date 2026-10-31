@@ -24,6 +24,7 @@ What's on the hill:
 - **Wind with a grudge.** It changes every turn, sometimes completely. The shot that worked last time is lying to you now.
 - **A shop between hills.** Spend your kill money on HE bombs, MIRVs, dirt bombs, shields, guidance, and a $1200 nuke labeled *do not miss*. Or get them free: shoot the loot crates that drop mid-battle.
 - **CPU rivals with attitude.** *Rookie*, *Lobber*, and *Windmaster* take you on one at a time. Add more and *Viper*, *Hammer*, and *Brutus* go free-for-all, shooting whoever is closest, including each other.
+- **A new hill every day.** The Daily Hill gives everyone the same map, wind and bonus kit against LOBBER. Take it in as few shots as you can, then post your row of shots.
 - **Couch warfare.** Hotseat for 2–4 people on one keyboard, with a `LOOK AWAY` screen so nobody peeks at your aim.
 - **Online with a five-letter code.** Send a friend `K7Q4M` and you're on the same hill, peer-to-peer, with no server to run.
 - **Bragging rights.** Finish a series and the game hands you a result card of the final blow, ready to post.
@@ -102,7 +103,7 @@ Links that work on `play.html`:
 
 | URL | Opens |
 | --- | --- |
-| `play.html?mode=cpu` / `hotseat` / `online` | the title screen with that mode picked |
+| `play.html?mode=cpu` / `daily` / `hotseat` / `online` | the title screen with that mode picked |
 | `play.html?host` | a new online room straight away |
 | `play.html?room=K7Q4M` | the join screen, already dialling that room |
 | `play.html?demo` | attract mode, CPU vs CPU |
@@ -111,11 +112,11 @@ A `?room=` link that lands on `index.html` is forwarded to the game.
 
 ## Modes (title screen)
 
-A match is a **best of 5**: first tank to **3 hill wins** takes the series (or the leader after five hills).
+A match is a **best of 5**: first tank to **3 hill wins** takes the series (or the leader after five hills). The Daily Hill is the exception: one hill, one try.
 
 | Setting | Options |
 | --- | --- |
-| **MODE** | **1P vs CPU** — you against 1–3 AI tanks · **HOTSEAT** — 2–4 humans, same keyboard · **ONLINE** — 2–4 players on their own screens |
+| **MODE** | **1P vs CPU** — you against 1–3 AI tanks · **DAILY HILL** — today's hill, the same for everyone · **HOTSEAT** — 2–4 humans, same keyboard · **ONLINE** — 2–4 players on their own screens |
 | **DIFFICULTY** | (vs CPU) Easy / Normal / Hard — a lone AI is named *Rookie*, *Lobber*, or *Windmaster* |
 | **CPU TANKS** | (vs CPU) 1, 2, or 3. With more than one it is a free-for-all: *Viper*, *Hammer*, and *Brutus* shoot whoever is closest, including each other |
 | **PLAYERS** | (hotseat) 2, 3, or 4 |
@@ -127,6 +128,26 @@ A match is a **best of 5**: first tank to **3 hill wins** takes the series (or t
 The game fills the browser window. The bar above it has **◄ EXIT TO HOME** and a **FULL SCREEN** button (hidden on iPhone, which can't do full screen for a page).
 
 Hotseat opens on `P1 — LOOK AWAY` before the hill is shown, then blanks again before every later human turn. Press **Enter** when the keyboard has been passed.
+
+## Daily Hill
+
+One hill a day, the same for everyone. Pick **DAILY HILL** on the title screen, or open `play.html?mode=daily`.
+
+- **Same for everyone.** The map, the tank positions, the wind on every turn, the crates and LOBBER's aim all come from random numbers seeded by the date. Two players who fire the same shots see the same game. The day turns over at midnight on your own clock, and Daily Hill #1 was 1 November 2026.
+- **One kit a day.** There's no shop. You get the usual starting ammo plus the day's bonus (a nuke, a MIRV, two HE bombs, two guidance charges, a shield or two dirt bombs). LOBBER gets no bonus.
+- **Fewest shots wins.** Each of your shots is marked when it settles: ⬛ miss, ⬜ close, 🟨 hit, 💥 kill. Take the hill and your score is the number of shots.
+- **Your first try counts.** The run is saved the moment you fire. Leave after that (ESC, reload, close the tab) and it counts as a loss. Leaving before you fire costs nothing.
+- **Replays are practice.** After today's result is in, the hill can be replayed, but the score stays.
+- **Share it.** The result opens the share dialog with a card of the final blow and a text you can paste anywhere:
+
+  ```text
+  One Hill · Daily Hill #1
+  ⬛⬜🟨💥
+  Taken in 4 shots · streak 3
+  https://onehill.app/play.html?mode=daily
+  ```
+
+  **COPY TEXT** copies it. Your record (played, won, current streak, best streak) is kept in this browser's local storage and nowhere else.
 
 ## Online play
 
@@ -155,7 +176,7 @@ Then open the game with `?broker=your.host:9000` (use `https://…` for a TLS br
 
 ## Sharing a result
 
-When a series ends, the game builds a result card: a 1200×675 PNG of the final blow of the last hill, with who took the series, the score, and every tank's hills, kills, damage, and shots. A dialog opens a moment later:
+(The Daily Hill shares its own way; see above.) When a series ends, the game builds a result card: a 1200×675 PNG of the final blow of the last hill, with who took the series, the score, and every tank's hills, kills, damage, and shots. A dialog opens a moment later:
 
 - **SHARE…** hands the picture itself to any app (Instagram, WhatsApp, Messages, X…). It appears on phones and on browsers that can share files.
 - **SAVE IMAGE** and **COPY IMAGE** for desktops.

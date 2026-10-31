@@ -321,6 +321,7 @@ body.demo #bar {
 .share-text {
   margin: 0 0 18px;
   color: #ffffff;
+  white-space: pre-line;
 }
 
 .share-row {
