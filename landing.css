@@ -60,6 +60,7 @@
   --soil-4: #482900;
   --soil-5: #382000;
   --soil-6: #291700;
+  --soil-7: #1f1101;
   --bedrock: #150c03;
 
   --font: "VT323", "Courier New", Courier, monospace;
@@ -230,6 +231,13 @@ a:hover {
 
 .menubar-snd[aria-pressed="true"] {
   color: var(--lgreen);
+}
+
+/* Help is the first to go: the footer links to it too. */
+@media (max-width: 860px) {
+  .menubar-help {
+    display: none;
+  }
 }
 
 @media (max-width: 700px) {
@@ -417,6 +425,10 @@ a:hover {
 
 .layer-6 {
   --soil: var(--soil-6);
+}
+
+.layer-7 {
+  --soil: var(--soil-7);
 }
 
 .bedrock {
@@ -1177,6 +1189,143 @@ kbd.down {
   }
 }
 
+/* ------------------------------------------------------------ daily hill */
+
+.daily {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 30px;
+  max-width: 780px;
+  margin: 48px auto 0;
+  padding: 16px 22px 18px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.42);
+  border: 2px solid var(--yellow);
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.55);
+}
+
+.daily-info {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.daily p {
+  margin: 0;
+}
+
+.daily-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 20px;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--yellow);
+}
+
+.daily-head b {
+  font-weight: normal;
+}
+
+.daily-next {
+  font-size: 22px;
+  color: #f3dcb6;
+}
+
+.daily-next b {
+  color: var(--white);
+}
+
+.daily-status {
+  margin-top: 6px !important;
+}
+
+.daily-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px !important;
+}
+
+/* Shot marks, as the game draws them: miss, close, hit, kill. */
+.daily-marks i {
+  width: 16px;
+  height: 16px;
+  background: var(--dgray);
+}
+
+.daily-marks .mark-c {
+  background: var(--gray);
+}
+
+.daily-marks .mark-h {
+  background: var(--yellow);
+}
+
+.daily-marks .mark-k {
+  background: #ffffff;
+  border: 5px solid var(--lred);
+}
+
+.daily .btn {
+  flex: none;
+  font-size: 26px;
+}
+
+/* -------------------------------------------------------------------- faq */
+
+.win-faq {
+  max-width: 860px;
+}
+
+.faq details {
+  border-top: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.faq summary {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0 8px;
+  color: var(--white);
+  list-style: none;
+  cursor: pointer;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq summary::before {
+  content: "[+]";
+  flex: none;
+  color: var(--lgreen);
+}
+
+.faq details[open] summary::before {
+  content: "[-]";
+}
+
+.faq summary:hover {
+  color: var(--yellow);
+}
+
+.faq h3 {
+  margin: 0;
+  font: inherit;
+}
+
+.faq details p {
+  margin: 0;
+  padding: 0 0 14px calc(3ch + 12px);
+}
+
+.faq cite {
+  font-style: normal;
+  color: var(--white);
+}
+
 /* ----------------------------------------------------------------- footer */
 
 .win-story {
@@ -1209,8 +1358,78 @@ kbd.down {
   margin: 44px 0 0;
 }
 
-.prompt {
+.foot-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legal {
+  max-width: 64ch;
+  margin: 14px 0 0;
+  color: #9a9a9a;
+}
+
+.legal a {
+  color: inherit;
+}
+
+.prompt,
+.shell {
   margin: 34px 0 0;
+}
+
+.shell-out .cmd {
+  color: #cccccc;
+}
+
+.shell-out .res {
+  color: var(--lgreen);
+}
+
+.shell-out .err {
+  color: var(--lred);
+}
+
+.shell-out div {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.shell-line {
+  display: flex;
+  align-items: baseline;
+  gap: 1ch;
+}
+
+.shell-line label {
+  flex: none;
+}
+
+.shell-line:focus-within label {
+  color: var(--lgreen);
+}
+
+.shell-line input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--white);
+  text-transform: uppercase;
+  caret-color: var(--lgreen);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+}
+
+.shell-line input::placeholder {
+  color: #777777;
+  text-transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1970,6 +2189,142 @@ kbd.down {
 [data-era="2026"] .prompt {
   font-size: 12px;
   color: var(--ink-3);
+}
+
+/* daily hill: a small readout panel */
+
+[data-era="2026"] .layer-7 {
+  background-color: #e2dfd9;
+}
+
+[data-era="2026"] .daily {
+  padding: 18px 20px;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+[data-era="2026"] .daily-head {
+  gap: 4px 16px;
+  font-family: var(--dot);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+[data-era="2026"] .daily-head b {
+  font-weight: 800;
+}
+
+[data-era="2026"] .daily-next {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+[data-era="2026"] .daily-next b {
+  font-weight: 600;
+  color: var(--signal);
+}
+
+[data-era="2026"] .daily-status {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+[data-era="2026"] .daily-marks i {
+  border-radius: 3px;
+}
+
+[data-era="2026"] .daily-marks .mark-k {
+  background: var(--panel);
+}
+
+[data-era="2026"] .daily .btn {
+  font-size: 13px;
+}
+
+/* faq */
+
+[data-era="2026"] .faq details {
+  border-top: 1px solid var(--rule);
+}
+
+[data-era="2026"] .faq summary {
+  padding: 12px 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+[data-era="2026"] .faq summary::before {
+  content: "+";
+  width: 1ch;
+  color: var(--signal);
+}
+
+[data-era="2026"] .faq details[open] summary::before {
+  content: "\2212";
+}
+
+[data-era="2026"] .faq summary:hover {
+  color: var(--signal);
+}
+
+[data-era="2026"] .faq details p {
+  padding: 0 0 16px calc(1ch + 12px);
+}
+
+[data-era="2026"] .faq cite {
+  color: var(--ink);
+}
+
+/* footer links and the prompt */
+
+[data-era="2026"] .foot-nav,
+[data-era="2026"] .legal {
+  font-size: 12px;
+}
+
+[data-era="2026"] .legal {
+  color: var(--ink-3);
+}
+
+[data-era="2026"] .shell {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+[data-era="2026"] .shell-out .cmd {
+  color: var(--ink-3);
+}
+
+[data-era="2026"] .shell-out .res,
+[data-era="2026"] .shell-line input {
+  color: var(--ink);
+}
+
+[data-era="2026"] .shell-out .err,
+[data-era="2026"] .shell-line:focus-within label {
+  color: var(--signal);
+}
+
+[data-era="2026"] .shell-line input {
+  text-transform: none;
+  caret-color: var(--signal);
+}
+
+[data-era="2026"] .shell-line input::placeholder {
+  color: var(--ink-3);
+}
+
+/* iOS zooms the page when a focused field is under 16px. */
+@media (hover: none) {
+  [data-era="2026"] .shell-line input {
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 400px) {

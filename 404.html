@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bad command or file name (404) | One Hill</title>
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#000000" />
+    <!-- Root-absolute paths: a host serves this page for any missing URL, at any depth. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script src="/js/era.js"></script>
+    <style>
+      @font-face {
+        font-family: "VT323";
+        src: url("/fonts/VT323-Regular.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        padding: 8vh 24px;
+        font-family: "VT323", "Courier New", Courier, monospace;
+        font-size: 24px;
+        line-height: 1.25;
+        color: #aaaaaa;
+        background: #000000;
+      }
+
+      main {
+        max-width: 34em;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 1em;
+        font: inherit;
+        color: #ffffff;
+      }
+
+      p {
+        margin: 0 0 1em;
+      }
+
+      b {
+        font-weight: normal;
+        color: #ffff55;
+      }
+
+      ul {
+        margin: 0 0 1em;
+        padding: 0;
+        list-style: none;
+      }
+
+      a {
+        color: #55ffff;
+      }
+
+      a:hover {
+        color: #ffffff;
+      }
+
+      a:focus-visible {
+        outline: 3px solid #ffff55;
+        outline-offset: 3px;
+      }
+
+      .cursor {
+        animation: blink 1s steps(1) infinite;
+      }
+
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      :root:not([data-era="2026"]) .e26,
+      :root[data-era="2026"] .e90 {
+        display: none;
+      }
+
+      [data-era="2026"] body {
+        font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+        font-size: 15px;
+        line-height: 1.6;
+        color: #5f5c56;
+        background: #e9e7e2;
+      }
+
+      [data-era="2026"] h1 {
+        color: #111111;
+      }
+
+      [data-era="2026"] b {
+        font-weight: 600;
+        color: #ff4f00;
+      }
+
+      [data-era="2026"] a {
+        color: #111111;
+        text-decoration-color: #ff4f00;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 3px;
+      }
+
+      [data-era="2026"] a:focus-visible {
+        outline: 2px solid #ff4f00;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .cursor {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p aria-hidden="true">
+        <span class="e90">C:\ONEHILL&gt; <span id="path">THAT.PAGE</span></span>
+        <span class="e26">~/onehill $ open <span id="path26">that-page</span></span>
+      </p>
+      <h1>
+        <span class="e90">Bad command or file name.</span>
+        <span class="e26">No such file or directory.</span>
+      </h1>
+      <p>That shot landed nowhere: <b>error 404</b>, there is no page at this address. The wind probably took it.</p>
+      <ul>
+        <li><a href="/play.html">PLAY.EXE</a> · play One Hill now</li>
+        <li><a href="/play.html?mode=daily">DAILY.EXE</a> · today's Daily Hill</li>
+        <li><a href="/">HOME</a> · back to the front page</li>
+      </ul>
+      <p aria-hidden="true">
+        <span class="e90">C:\ONEHILL&gt; </span><span class="e26">~/onehill $ </span><span class="cursor">_</span>
+      </p>
+    </main>
+    <script>
+      // Echo the address that missed, the way a prompt would.
+      (function () {
+        let name = "";
+        try {
+          name = decodeURIComponent(location.pathname.split("/").pop() || "").slice(0, 28);
+        } catch (e) {
+          return; /* a mangled address keeps the placeholder */
+        }
+        if (!name || name === "404.html") return;
+        document.getElementById("path").textContent = name.toUpperCase();
+        document.getElementById("path26").textContent = name.toLowerCase();
+      })();
+    </script>
+  </body>
+</html>

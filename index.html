@@ -13,10 +13,10 @@
       gtag("js", new Date());
       gtag("config", "G-55PL2Q7BF8");
     </script>
-    <title>One Hill: Tank Wars Tribute, VGA artillery in your browser</title>
+    <title>One Hill: Free Online Tank Artillery Game | Tank Wars Tribute</title>
     <meta
       name="description"
-      content="The 1990 DOS artillery classic, rebuilt for 2026. Up to four tanks, one hill, and wind that changes every turn. Play free in your browser against CPU, hotseat or online."
+      content="Free tank artillery game in your browser, a tribute to the 1990 DOS classic Tank Wars. Play the CPU, hotseat or online, plus a new Daily Hill every day."
     />
     <link rel="canonical" href="https://onehill.app/" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
@@ -36,7 +36,10 @@
     <meta name="twitter:title" content="One Hill: a Tank Wars tribute" />
     <meta name="twitter:description" content="Up to four tanks. One hill. The wind changes every turn. Free in your browser." />
     <meta name="twitter:image" content="https://onehill.app/og-image.png" />
+    <meta name="twitter:image:alt" content="The ONE HILL logo over a night sky, with two tanks on a hill. A Tank Wars tribute." />
 
+    <meta name="application-name" content="One Hill" />
+    <meta name="apple-mobile-web-app-title" content="One Hill" />
     <meta name="theme-color" content="#0000AA" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="img/icon-192.png" type="image/png" sizes="192x192" />
@@ -79,6 +82,47 @@
               "datePublished": "1990",
               "author": { "@type": "Person", "name": "Kenny Morse" }
             }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://onehill.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is One Hill?",
+                "acceptedAnswer": { "@type": "Answer", "text": "One Hill is a free turn-based tank artillery game that runs in your web browser. Set your barrel's angle and power, allow for the wind, and lob shells over the hill at up to three other tanks. It is a tribute to Tank Wars, the 1990 DOS shareware game by Kenny Morse." }
+              },
+              {
+                "@type": "Question",
+                "name": "Is One Hill free to play?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. The whole game is free, with no account, no download and nothing to pay for. Open the page and play." }
+              },
+              {
+                "@type": "Question",
+                "name": "How do I play with friends online?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Pick ONLINE, then HOST, and you get a five-letter invite code. Send friends the code or the invite link, and up to four players share one hill, each on their own screen. Empty seats can be filled with CPU tanks, and nobody has to sign up." }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I play on a phone or tablet?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. One Hill works on touch screens: drag around your tank to aim, drag up or down for power, and tap to fire. On a computer you can use the keyboard or the mouse." }
+              },
+              {
+                "@type": "Question",
+                "name": "What is the Daily Hill?",
+                "acceptedAnswer": { "@type": "Answer", "text": "The Daily Hill is one new hill a day that is the same for everyone: the same map, the same wind on every turn and the same bonus kit, against the LOBBER CPU. Take the hill in as few shots as you can. Your first try counts, and you can share your row of shots afterwards. A new hill arrives at midnight, your time." }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I play alone, or with friends on one keyboard?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. Play against one to three CPU tanks on EASY, NORMAL or HARD, or pass one keyboard between two to four players in hotseat mode." }
+              },
+              {
+                "@type": "Question",
+                "name": "Is this the original Tank Wars?",
+                "acceptedAnswer": { "@type": "Answer", "text": "No. One Hill is an independent fan tribute, written from scratch with original graphics and sound, and it is not affiliated with the original game. If you grew up on Tank Wars, Scorched Earth or other artillery games, it will feel familiar." }
+              }
+            ]
           }
         ]
       }
@@ -103,6 +147,7 @@
           <li class="menubar-mid"><a href="#online"><span class="hot">O</span>nline</a></li>
           <li class="menubar-wide"><a href="#arsenal"><span class="hot">A</span>rsenal</a></li>
           <li class="menubar-wide"><a href="#keys"><span class="hot">K</span>eys</a></li>
+          <li class="menubar-wide menubar-help"><a href="#faq"><span class="hot">H</span>elp</a></li>
         </ul>
       </nav>
       <div class="era-switch" role="group" aria-label="Era">
@@ -145,9 +190,21 @@
             <a class="btn btn-alt" href="play.html?host">HOST ONLINE GAME</a>
           </div>
           <p class="fine">
-            Free · plays in the browser · nothing to install · <a href="#online">got an invite code?</a> ·
-            <a href="play.html?mode=daily">play today's Daily Hill</a>
+            Free · plays in the browser · nothing to install · <a href="#online">got an invite code?</a>
           </p>
+          <aside class="daily" aria-labelledby="daily-title">
+            <div class="daily-info">
+              <p class="daily-head">
+                <b id="daily-title">DAILY HILL<span data-daily="num"></span></b>
+                <span class="daily-next" data-daily="next" hidden>NEXT HILL IN <b data-daily="clock">0:00:00</b></span>
+              </p>
+              <p class="daily-status" data-daily="status">
+                One new hill a day, the same map and wind for everyone. Take it in as few shots as you can.
+              </p>
+              <p class="daily-marks" data-daily="marks" hidden></p>
+            </div>
+            <a class="btn btn-alt" href="play.html?mode=daily" data-daily="go">PLAY TODAY'S HILL</a>
+          </aside>
         </div>
       </section>
 
@@ -155,8 +212,8 @@
         <div class="wrap split split-demo">
           <div class="crt">
             <div class="crt-screen">
-              <img class="crt-poster e90" src="img/demo.png" alt="" width="1280" height="800" loading="lazy" />
-              <img class="crt-poster e26" src="img/demo-2026.jpg" alt="" width="1280" height="800" loading="lazy" />
+              <img class="crt-poster e90" src="img/demo.png" alt="One Hill gameplay in 1990 mode: an HE bomb goes off between two tanks on a brown canyon map under a VGA night sky" width="1280" height="800" loading="lazy" />
+              <img class="crt-poster e26" src="img/demo-2026.jpg" alt="One Hill gameplay in 2026 mode: an HE bomb lands in the canyon between two tanks on black hills against off-white paper" width="1280" height="800" loading="lazy" />
               <iframe
                 class="crt-live"
                 data-src="play.html?demo"
@@ -366,6 +423,45 @@
           </div>
         </div>
       </section>
+
+      <section class="layer layer-7" id="faq" aria-labelledby="faq-title">
+        <div class="wrap">
+          <div class="win win-faq">
+            <p class="win-title"><span class="e90">HELP.TXT</span><span class="e26">FAQ</span></p>
+            <h2 id="faq-title">Questions before you fire.</h2>
+            <div class="faq">
+              <details open>
+                <summary><h3>What is One Hill?</h3></summary>
+                <p>One Hill is a free turn-based tank artillery game that runs in your web browser. Set your barrel's angle and power, allow for the wind, and lob shells over the hill at up to three other tanks. It is a tribute to <cite>Tank Wars</cite>, the 1990 DOS shareware game by Kenny Morse.</p>
+              </details>
+              <details>
+                <summary><h3>Is One Hill free to play?</h3></summary>
+                <p>Yes. The whole game is free, with no account, no download and nothing to pay for. Open the page and play.</p>
+              </details>
+              <details>
+                <summary><h3>How do I play with friends online?</h3></summary>
+                <p>Pick ONLINE, then HOST, and you get a five-letter invite code. Send friends the code or the invite link, and up to four players share one hill, each on their own screen. Empty seats can be filled with CPU tanks, and nobody has to sign up.</p>
+              </details>
+              <details>
+                <summary><h3>Can I play on a phone or tablet?</h3></summary>
+                <p>Yes. One Hill works on touch screens: drag around your tank to aim, drag up or down for power, and tap to fire. On a computer you can use the keyboard or the mouse.</p>
+              </details>
+              <details>
+                <summary><h3>What is the Daily Hill?</h3></summary>
+                <p>The Daily Hill is one new hill a day that is the same for everyone: the same map, the same wind on every turn and the same bonus kit, against the LOBBER CPU. Take the hill in as few shots as you can. Your first try counts, and you can share your row of shots afterwards. A new hill arrives at midnight, your time.</p>
+              </details>
+              <details>
+                <summary><h3>Can I play alone, or with friends on one keyboard?</h3></summary>
+                <p>Yes. Play against one to three CPU tanks on EASY, NORMAL or HARD, or pass one keyboard between two to four players in hotseat mode.</p>
+              </details>
+              <details>
+                <summary><h3>Is this the original Tank Wars?</h3></summary>
+                <p>No. One Hill is an independent fan tribute, written from scratch with original graphics and sound, and it is not affiliated with the original game. If you grew up on Tank Wars, Scorched Earth or other artillery games, it will feel familiar.</p>
+              </details>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="layer bedrock">
@@ -416,8 +512,19 @@ Send a friend an invite code instead.</pre>
         <p class="credit">
           A tribute to <cite>Tank Wars</cite> (1990) by Kenny Morse. Every pixel and beep here is original; nothing was
           copied from the DOS release. Independent fan project, not affiliated with the original.
-          Made by <a href="https://culi.app">culi.app</a> ·
-          <a href="https://github.com/rafandida/one-hill">Source on GitHub</a>
+        </p>
+        <nav class="foot-nav" aria-label="Footer">
+          <ul>
+            <li><a href="play.html">Play One Hill</a></li>
+            <li><a href="play.html?mode=daily">Daily Hill</a></li>
+            <li><a href="play.html?host">Host an online game</a></li>
+            <li><a href="#faq">Help</a></li>
+            <li><a href="https://github.com/rafandida/one-hill">Source on GitHub</a></li>
+          </ul>
+        </nav>
+        <p class="legal">
+          © 2026 <a href="https://culi.app">culi.app</a>. No accounts and no sign-up. Daily Hill results stay in your
+          browser. Visits are counted with Google Analytics.
         </p>
         <p class="prompt" aria-hidden="true"><span class="e90">C:\ONEHILL&gt;</span><span class="e26">~/onehill $ </span><span class="cursor">_</span></p>
       </div>

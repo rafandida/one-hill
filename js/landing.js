@@ -1544,6 +1544,225 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Daily Hill board: today's number, the countdown to the next hill, and how
+  // this browser did. Same epoch, calendar and storage key as js/game.js.
+  // ---------------------------------------------------------------------------
+  const DAILY_EPOCH = Date.UTC(2026, 10, 1); // Daily Hill #1
+  const DAILY_KEY = "onehill-daily-v1";
+  const MARK_NAME = { m: "miss", c: "close", h: "hit", k: "kill" };
+
+  function dailyNumber() {
+    const d = new Date();
+    return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - DAILY_EPOCH) / 86400000) + 1;
+  }
+
+  /** Time left until the next hill, as H:MM:SS. */
+  function dailyCountdown() {
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const s = Math.max(0, Math.floor((next - now) / 1000));
+    const mm = String(Math.floor(s / 60) % 60).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return Math.floor(s / 3600) + ":" + mm + ":" + ss;
+  }
+
+  function dailyStats() {
+    let s = null;
+    try {
+      s = JSON.parse(remember(DAILY_KEY) || "null");
+    } catch (e) {
+      s = null;
+    }
+    return s && typeof s === "object" ? s : {};
+  }
+
+  function shotCount(n) {
+    return n + (n === 1 ? " shot" : " shots");
+  }
+
+  function setupDaily() {
+    const box = document.querySelector(".daily");
+    if (!box) return;
+    const el = {};
+    const parts = box.querySelectorAll("[data-daily]");
+    for (let i = 0; i < parts.length; i++) el[parts[i].dataset.daily] = parts[i];
+    let shownDay = null;
+
+    function paint() {
+      const day = dailyNumber();
+      shownDay = day;
+      const s = dailyStats();
+      const last = s.last && s.last.day === day ? s.last : null;
+      const marks = last && typeof last.marks === "string" ? last.marks : "";
+      // A win streak only survives if yesterday (or today) was won.
+      const streak = (s.lastWonDay || 0) >= day - 1 ? s.streak || 0 : 0;
+      let line = "Not taken yet. Same map, same wind, same kit for everyone.";
+      let go = "PLAY TODAY'S HILL";
+      if (!last) {
+        if (streak > 0) line = "Not taken yet. Your streak of " + streak + " is on the line.";
+      } else if (!last.done) {
+        line = "Run in progress: " + shotCount(marks.length) + " so far.";
+      } else {
+        line = (last.won ? "Taken in " : last.left ? "Left after " : "Lost after ") + shotCount(marks.length) + ".";
+        if (last.won && streak > 1) line += " Win streak: " + streak + ".";
+        if (!last.won) line += " A new hill arrives at midnight.";
+        go = "PRACTICE RUN";
+      }
+      el.num.textContent = day > 0 ? " #" + day : "";
+      el.status.textContent = line;
+      el.go.textContent = go;
+      el.next.hidden = false;
+      el.clock.textContent = dailyCountdown();
+
+      const names = [];
+      el.marks.textContent = "";
+      for (let i = 0; i < marks.length; i++) {
+        if (!MARK_NAME[marks[i]]) continue;
+        const sq = document.createElement("i");
+        sq.className = "mark-" + marks[i];
+        el.marks.appendChild(sq);
+        names.push(MARK_NAME[marks[i]]);
+      }
+      el.marks.hidden = !names.length;
+      if (names.length) {
+        el.marks.setAttribute("role", "img");
+        el.marks.setAttribute("aria-label", "Your shots: " + names.join(", "));
+      }
+    }
+
+    paint();
+    setInterval(function () {
+      if (document.hidden) return;
+      if (dailyNumber() !== shownDay) paint();
+      else el.clock.textContent = dailyCountdown();
+    }, 1000);
+    // Coming back from the game, or finishing a run in another tab.
+    window.addEventListener("pageshow", paint);
+    window.addEventListener("storage", function (e) {
+      if (e.key === DAILY_KEY) paint();
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Footer prompt: it takes commands. Type HELP.
+  // ---------------------------------------------------------------------------
+  const SHELL_PLACES = {
+    TOP: "top",
+    DEMO: "demo",
+    MODES: "modes",
+    ONLINE: "online",
+    ARSENAL: "arsenal",
+    SUPPLY: "arsenal",
+    KEYS: "keys",
+    FAQ: "faq",
+    HISTORY: "story-title",
+  };
+
+  function setupShell() {
+    const old = document.querySelector(".prompt");
+    if (!old) return;
+    const shell = document.createElement("div");
+    shell.className = "shell";
+    shell.innerHTML =
+      '<div class="shell-out" role="log" aria-live="polite"></div>' +
+      '<form class="shell-line">' +
+      '<label for="shell-in"><span class="e90">C:\\ONEHILL&gt;</span><span class="e26">~/onehill $</span>' +
+      '<span class="sr-only"> Command prompt. Type HELP and press Enter.</span></label>' +
+      '<input id="shell-in" type="text" maxlength="32" placeholder="type HELP" ' +
+      'autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" />' +
+      "</form>";
+    old.parentNode.replaceChild(shell, old);
+    const out = shell.querySelector(".shell-out");
+    const form = shell.querySelector("form");
+    const input = shell.querySelector("input");
+    let previous = "";
+
+    function say(text, kind) {
+      const line = document.createElement("div");
+      line.className = kind || "res";
+      line.textContent = text;
+      out.appendChild(line);
+      while (out.children.length > 12) out.removeChild(out.firstChild);
+    }
+
+    function launch(url, what) {
+      say("LOADING " + what + " ...");
+      setTimeout(function () {
+        location.href = url;
+      }, 400);
+    }
+
+    function run(raw) {
+      const words = raw.toUpperCase().split(/\s+/);
+      const cmd = words[0].replace(/\.(EXE|TXT)$/, "");
+      const arg = words.slice(1).join(" ");
+      if (cmd === "HELP" || cmd === "?" || cmd === "MAN") {
+        say("PLAY   DAILY   HOST   JOIN <CODE>   DIR   ERA   SND   VER   CLS");
+        say("OR NAME A PLACE: MODES, ONLINE, ARSENAL, KEYS, FAQ, HISTORY, TOP");
+      } else if (cmd === "PLAY" || cmd === "START" || cmd === "ONEHILL") {
+        launch("play.html", "PLAY.EXE");
+      } else if (cmd === "DAILY") {
+        launch("play.html?mode=daily", "DAILY HILL" + (dailyNumber() > 0 ? " #" + dailyNumber() : ""));
+      } else if (cmd === "HOST") {
+        launch("play.html?host", "A ROOM");
+      } else if (cmd === "JOIN") {
+        const code = cleanCode(arg);
+        if (code.length === 5) launch("play.html?room=" + code, "ROOM " + code);
+        else say("USAGE: JOIN K7Q4M   (5 CHARACTERS, NO I, O, 0 OR 1)", "err");
+      } else if (cmd === "DIR" || cmd === "LS") {
+        say("PLAY.EXE   DAILY.EXE   MODES   ONLINE   ARSENAL   KEYS");
+        say("HELP.TXT   HISTORY.TXT   REGISTER.TXT        0 BYTES TO PAY");
+      } else if (cmd === "ERA" || cmd === "1990" || cmd === "2026") {
+        const next = cmd === "ERA" ? (isModern() ? "1990" : "2026") : cmd;
+        if (window.TankEra) window.TankEra.set(next);
+        say("THE YEAR IS NOW " + next + ".");
+      } else if (cmd === "SND" || cmd === "SOUND" || cmd === "MUTE") {
+        const btn = document.querySelector(".menubar-snd");
+        if (btn) btn.click();
+        say("SOUND " + (Snd.on ? "ON" : "OFF") + ".");
+      } else if (cmd === "VER") {
+        say("ONE HILL, A TANK WARS TRIBUTE" + (dailyNumber() > 0 ? ". DAILY HILL #" + dailyNumber() + "." : "."));
+      } else if (cmd === "CLS" || cmd === "CLEAR") {
+        out.textContent = "";
+      } else if (cmd === "REGISTER") {
+        say("ONE HILL IS FREE. THERE IS NOTHING TO REGISTER.");
+      } else if (cmd === "WIND") {
+        say("WIND " + (Math.random() < 0.5 ? "<< " : ">> ") + irand(1, 9) + ". IT WILL CHANGE.");
+      } else if (cmd === "FIRE" || cmd === "NUKE") {
+        say("NUKE: $1200. YOU HAVE $250. WIN SOME HILLS FIRST.", "err");
+      } else if (cmd === "EXIT" || cmd === "QUIT") {
+        say("THERE IS NO RETREAT.", "err");
+      } else if (cmd === "FORMAT" || cmd === "DEL" || cmd === "DELTREE" || cmd === "RM" || cmd === "SUDO") {
+        say("ACCESS DENIED. NICE TRY.", "err");
+      } else if (SHELL_PLACES[cmd]) {
+        const place = document.getElementById(SHELL_PLACES[cmd]);
+        if (place) place.scrollIntoView();
+        say("OK.");
+      } else {
+        say(isModern() ? "onehill: command not found: " + words[0].toLowerCase() : "Bad command or file name", "err");
+      }
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const raw = input.value.trim();
+      input.value = "";
+      if (!raw) return;
+      previous = raw;
+      say(isModern() ? "~/onehill $ " + raw : "C:\\ONEHILL> " + raw.toUpperCase(), "cmd");
+      Snd.blip();
+      run(raw);
+    });
+    // Up arrow brings back the last command, like DOSKEY.
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowUp" && previous) {
+        e.preventDefault();
+        input.value = previous;
+      }
+    });
+  }
+
   setupSound();
   setupHero();
   setupMonitor();
@@ -1552,4 +1771,6 @@
   setupTerminal();
   setupArsenal();
   setupKeycaps();
+  setupDaily();
+  setupShell();
 })();
