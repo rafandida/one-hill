@@ -277,7 +277,8 @@ To report on the custom parameters (`daily_number`, `result`, `shots`, `practice
 index.html      front page
 js/era.js       the 1990 / 2026 switch, shared by both pages
 landing.css     front page styles (VGA palette, soil layers, text-mode windows; 2026 section at the end)
-js/landing.js   front page toys (shootable logo, attract monitor, join box, blast chart)
+js/landing.js   front page toys (shootable logo, attract monitor, join box, blast chart, Daily Hill board, footer prompt)
+404.html        "Bad command or file name", for addresses that miss (root-absolute paths, so serve the site from the domain root)
 play.html       the game page
 styles.css      game page: menu bar, monitor bezel, pixel scaling, 2026 section at the end
 js/net.js       online transport (PeerJS loader, invite codes, peer links)
