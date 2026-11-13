@@ -209,6 +209,15 @@
   const CLOCK_GRACE = 12;
   const SYNC_PATIENCE = 4;
   const JOIN_ROWS = 4; // public rooms shown on the join screen
+  // Bot rooms: always on the join screen, so the list is never a dead end.
+  // Picking one opens a real public room of your own with the CPU seats
+  // already taken. You can start against the bots at once, and until you do
+  // the room is on the public list for a human to walk into.
+  const BOT_ROOMS = [
+    { bot: true, code: "WARM-UP", cpu: 1, diff: 0 },
+    { bot: true, code: "SKIRMISH", cpu: 2, diff: 1 },
+    { bot: true, code: "BRAWL", cpu: 3, diff: 2 },
+  ];
   const MENU_MODES = { title: true, lobby: true, join: true, netdown: true };
 
   // ---------------------------------------------------------------------------
@@ -792,6 +801,18 @@
   function onKeyDown(e) {
     Sfx.ensure();
     if (Share.isOpen()) return;
+    // Typing in the chat box is not playing: Esc hands the keys back to the game.
+    const tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") {
+      if (e.key === "Escape" || e.key === "Esc") canvas.focus();
+      return;
+    }
+    // "/" jumps to the chat box while in an online room.
+    if (e.key === "/" && chatForm && !chatForm.hidden) {
+      e.preventDefault();
+      chatInput.focus();
+      return;
+    }
     // Leave browser shortcuts (copy, paste, reload) alone. AltGr reads as Ctrl+Alt.
     if (e.metaKey || (e.ctrlKey && !e.altKey)) return;
     const k = e.key;
@@ -1572,8 +1593,12 @@
     this.browse = null;
     this.browseState = "";
     this.publicRooms = [];
+    this.realRooms = 0;
     this.joinPick = -1;
     this.joinBoxes = [];
+    // Room chat: recent lines, and whether the chat box has the keyboard.
+    this.chat = [];
+    this.chatOpen = false;
     // 3D view (js/view3d.js): wanted, the renderer, and whether this frame used it.
     this.view3d = false;
     this.v3 = null;
@@ -2565,7 +2590,9 @@
       if (this.ai) {
         const tank = this.current();
         if (guest) flushTaps();
-        else if (consume(" ") || consume("Spacebar") || consume("Enter")) {
+        else if ((consume(" ") || consume("Spacebar") || consume("Enter")) && this.fireLock <= 0) {
+          // The same short lock as your own shot: a second press of a double tap
+          // that lands just as the CPU's turn opens must not fire its shell too.
           if (tank) {
             tank.angle = this.ai.angle;
             tank.power = this.ai.power;
@@ -2736,6 +2763,7 @@
       listState: "",
     };
     this.net = net;
+    this.chat = [];
     this.mode = "lobby";
     this.lobbyRow = 0;
     this.netCpu = Math.min(this.netCpu, MAX_TANKS - 1);
@@ -2782,6 +2810,7 @@
       playing: false,
     };
     this.net = net;
+    this.chat = [];
     this.joinError = "";
     this.mode = "join";
     TankNet.join(code, {
@@ -2818,6 +2847,7 @@
       const rest = q.toString();
       history.replaceState(null, "", location.pathname + (rest ? "?" + rest : ""));
     }
+    this.chat = [];
     if (!net) return;
     if (net.lobby) net.lobby.close();
     if (net.room) net.room.close();
@@ -2862,8 +2892,110 @@
   /** Queue a message; the game loop applies it in order. */
   Game.prototype.netPost = function (net, link, m) {
     if (this.net !== net || !m || typeof m.t !== "string") return;
+    // Chat is not part of the game's ordered message stream: show it at once.
+    if (m.t === "chat") {
+      this.chatIn(link, m);
+      return;
+    }
     net.inbox.push({ link: link, m: m, wait: 0 });
     if (this.onNetActivity) this.onNetActivity();
+  };
+
+  // ---------------------------------------------------------------------------
+  // Room chat. Guests send lines to the host; the host stamps each with the
+  // sender's seat and sends it to everyone, so nobody can speak as someone
+  // else. Lines are plain text, cut to CHAT_MAX, and never touch the game state.
+  // ---------------------------------------------------------------------------
+  const CHAT_MAX = 80;
+  const CHAT_KEEP = 30;
+  const CHAT_GAP = 500; // ms a seat must leave between lines
+  const CHAT_SHOW = 10; // seconds a line stays up
+
+  function cleanChat(raw) {
+    return String(raw === undefined || raw === null ? "" : raw)
+      .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, CHAT_MAX);
+  }
+
+  Game.prototype.chatAdd = function (seat, text) {
+    this.chat.push({ seat: seat, text: text, at: performance.now() });
+    if (this.chat.length > CHAT_KEEP) this.chat.shift();
+    Sfx.tick();
+  };
+
+  /** Say something to the room. */
+  Game.prototype.chatSay = function (raw) {
+    const net = this.net;
+    const text = cleanChat(raw);
+    if (!net || !text) return;
+    if (net.host) {
+      if (!net.room) return;
+      this.chatAdd(0, text);
+      net.room.broadcast({ t: "chat", seat: 0, text: text });
+    } else if (net.link) {
+      net.link.send({ t: "chat", text: text });
+    }
+  };
+
+  Game.prototype.chatIn = function (link, m) {
+    const net = this.net;
+    const text = cleanChat(m.text);
+    if (!text) return;
+    if (!net.host) {
+      this.chatAdd(clamp(m.seat | 0, 0, MAX_TANKS - 1), text);
+      return;
+    }
+    for (let i = 1; i < net.seats.length; i++) {
+      const s = net.seats[i];
+      if (s.link !== link || s.gone) continue;
+      const now = performance.now();
+      if (now - (s.chatAt || 0) < CHAT_GAP) return;
+      s.chatAt = now;
+      this.chatAdd(i, text);
+      net.room.broadcast({ t: "chat", seat: i, text: text });
+      return;
+    }
+  };
+
+  /** Recent chat, bottom-left of the screen. Everything kept shows while the chat box is in use. */
+  Game.prototype.drawChat = function (ctx, bottom, rows) {
+    if (!this.net || !this.chat.length) return;
+    const now = performance.now();
+    const lines = [];
+    for (let i = this.chat.length - 1; i >= 0 && lines.length < rows; i--) {
+      const c = this.chat[i];
+      const age = (now - c.at) / 1000;
+      if (!this.chatOpen && age > CHAT_SHOW) break;
+      lines.push({ c: c, fade: this.chatOpen ? 1 : Math.min(1, (CHAT_SHOW - age) / 1.5) });
+    }
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < lines.length; i++) {
+      const c = lines[i].c;
+      const y = bottom - 7 - i * 14;
+      const name = "P" + (c.seat + 1) + " ";
+      ctx.font = font(11, true);
+      const nameW = ctx.measureText(name).width;
+      ctx.font = font(11);
+      let text = c.text;
+      const room = W - 24 - nameW;
+      while (text.length > 1 && ctx.measureText(text).width > room) text = text.slice(0, -2) + "…";
+      const w = nameW + ctx.measureText(text).width + 10;
+      ctx.globalAlpha = lines[i].fade * 0.78;
+      ctx.fillStyle = MODERN ? PAPER : C.black;
+      ctx.fillRect(6, y - 7, w, 14);
+      ctx.globalAlpha = lines[i].fade;
+      ctx.font = font(11, true);
+      ctx.fillStyle = PLAYER_COLORS[c.seat] || C.white;
+      ctx.fillText(name, 11, y + 1);
+      ctx.font = font(11);
+      ctx.fillStyle = C.white;
+      ctx.fillText(text, 11 + nameW, y + 1);
+    }
+    ctx.restore();
   };
 
   /** Host: tell every guest (but `except`). Guest: tell the host. */
@@ -3416,12 +3548,16 @@
     if (this.browse || !window.TankNet) return;
     const self = this;
     this.browseState = "connecting";
+    this.publicRooms = BOT_ROOMS.slice();
+    this.realRooms = 0;
     this.browse = TankNet.lobby({
       rooms: function (list) {
-        self.publicRooms = list.filter(function (r) {
+        const real = list.filter(function (r) {
           return r.humans < MAX_TANKS;
         });
-        if (self.joinPick >= Math.min(self.publicRooms.length, JOIN_ROWS)) self.joinPick = -1;
+        // People first; bot rooms fill whatever rows are left, and one always shows.
+        self.publicRooms = real.slice(0, JOIN_ROWS - 1).concat(BOT_ROOMS).slice(0, JOIN_ROWS);
+        self.realRooms = real.length;
       },
       state: function (s) {
         self.browseState = s;
@@ -3432,8 +3568,25 @@
   Game.prototype.joinPublic = function (room) {
     if (!room || this.net) return;
     Sfx.ui();
+    if (room.bot) {
+      this.hostBotRoom(room.cpu, room.diff);
+      return;
+    }
     this.joinCode = room.code;
     this.joinOnline(room.code);
+  };
+
+  /** Open a public room with CPU tanks already seated. */
+  Game.prototype.hostBotRoom = function (cpu, diff) {
+    this.playMode = "online";
+    this.onlineRole = "host";
+    this.netPublic = true;
+    this.netCpu = clamp(cpu | 0, 1, MAX_TANKS - 1);
+    this.difficulty = clamp(diff | 0, 0, 2);
+    this.joinCode = "";
+    this.hostOnline();
+    this.net.note = "BOTS ARE IN. START NOW, OR WAIT FOR A HUMAN";
+    this.net.noteT = 6;
   };
 
   Game.prototype.joinClick = function (p) {
@@ -4760,14 +4913,7 @@
     ctx.fillText("— OR PICK A PUBLIC ROOM —", W / 2, 232);
     const rooms = this.publicRooms;
     const shown = Math.min(rooms.length, JOIN_ROWS);
-    if (!shown) {
-      let text = "No public rooms open right now. Host one and it shows up here.";
-      if (this.browseState === "connecting") text = "LOOKING FOR PUBLIC ROOMS…";
-      else if (this.browseState === "down") text = "ROOM LIST UNREACHABLE. A CODE STILL WORKS.";
-      ctx.fillStyle = this.browseState === "down" ? C.lred : C.dgray;
-      ctx.font = font(11);
-      ctx.fillText(text, W / 2, 258);
-    }
+
     for (let i = 0; i < shown; i++) {
       const r = rooms[i];
       const y = 249 + i * 15;
@@ -4784,22 +4930,31 @@
       ctx.fillStyle = C.white;
       let who = r.humans + "/" + MAX_TANKS + " players";
       if (r.cpu) who += " · " + r.cpu + " cpu " + DIFF_LABELS[r.diff].toLowerCase();
+      if (r.bot) {
+        who = "bot room · you + " + r.cpu + " cpu " + DIFF_LABELS[r.diff].toLowerCase();
+        ctx.fillStyle = C.gray;
+      }
       ctx.fillText(who, 226, y + 1);
       ctx.textAlign = "right";
       ctx.font = font(11, true);
       ctx.fillStyle = C.lgreen;
-      ctx.fillText("JOIN", 494, y + 1);
+      ctx.fillText(r.bot ? "OPEN" : "JOIN", 494, y + 1);
       ctx.textAlign = "center";
       this.joinBoxes.push({ i: i, x: 140, y: y - 2, w: 360, h: 15 });
     }
-    if (rooms.length > shown) {
-      ctx.fillStyle = C.dgray;
-      ctx.font = font(11);
-      ctx.fillText("+" + (rooms.length - shown) + " more", 540, 249 + (shown - 1) * 15 + 1);
+    // How many of those rows are people, and whether the list is reachable at all.
+    let status = this.realRooms ? "" : "No player rooms open right now. Open a bot room and you're listed.";
+    if (this.browseState === "connecting") status = "Looking for player rooms…";
+    else if (this.browseState === "down") status = "Room list unreachable. Bot rooms and codes still work.";
+    else if (this.realRooms > JOIN_ROWS - 1) status = "+" + (this.realRooms - (JOIN_ROWS - 1)) + " more player rooms on the front page";
+    if (status) {
+      ctx.fillStyle = this.browseState === "down" ? C.lred : C.dgray;
+      ctx.font = font(10);
+      ctx.fillText(status, W / 2, 249 + shown * 15 + 2);
     }
     ctx.fillStyle = C.white;
     ctx.font = font(12);
-    ctx.fillText("ENTER  join     ↑ ↓  public rooms     ESC  back", W / 2, 318);
+    ctx.fillText("ENTER  join     ↑ ↓  public rooms     ESC  back", W / 2, 330);
   };
 
   Game.prototype.drawNetDown = function (ctx) {
@@ -4878,6 +5033,7 @@
       else if (this.mode === "join") this.drawJoin(ctx);
       else this.drawNetDown(ctx);
       this.drawHud(ctx);
+      this.drawChat(ctx, H - 2, 3);
       return;
     }
 
@@ -4888,6 +5044,7 @@
 
     if (this.mode === "shop") {
       this.drawShop(ctx);
+      this.drawChat(ctx, H - 2, 2);
       return;
     }
 
@@ -4935,6 +5092,7 @@
     this.drawBanner(ctx);
     this.drawCheer(ctx);
     if (this.mode === "victory") this.drawVictory(ctx);
+    this.drawChat(ctx, H - FOOT - 2, 5);
   };
 
   /** Rings and rays thrown out from the point of a great shot. */
@@ -5646,6 +5804,36 @@
   const canvas = document.getElementById("game");
   const game = new Game(canvas);
 
+  // Room chat box, under the screen. Shown only while in an online room.
+  const chatForm = document.getElementById("chat");
+  const chatInput = chatForm && chatForm.querySelector("input");
+  if (chatForm) {
+    chatForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      game.chatSay(chatInput.value);
+      chatInput.value = "";
+      // On a keyboard, hand the keys straight back to the game. On a phone,
+      // keep the box so a conversation doesn't mean re-opening the keyboard.
+      if (!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches)) canvas.focus();
+    });
+    chatInput.addEventListener("focus", function () {
+      game.chatOpen = true;
+    });
+    chatInput.addEventListener("blur", function () {
+      game.chatOpen = false;
+    });
+  }
+  function syncChatBox() {
+    if (!chatForm) return;
+    const net = game.net;
+    const on = !!(net && (net.host ? net.code : net.seat >= 0));
+    if (on === !chatForm.hidden) return;
+    chatForm.hidden = !on;
+    document.documentElement.classList.toggle("chat-on", on);
+    if (!on && document.activeElement === chatInput) canvas.focus();
+    game.resize();
+  }
+
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("blur", function () {
@@ -5752,7 +5940,7 @@
     }
     if (this.mode === "aim" && this.ai && !dragged && !this.isGuest()) {
       const cpu = this.current();
-      if (cpu) {
+      if (cpu && this.fireLock <= 0) {
         cpu.angle = this.ai.angle;
         cpu.power = this.ai.power;
         cpu.weapon = this.ai.weapon;
@@ -5823,14 +6011,24 @@
     }
     if (params.has("host") && window.TankNet) {
       // ?host&public opens a room that is already on the public list.
-      if (params.has("public")) game.netPublic = true;
+      // ?host&public&cpu=2&diff=1 is a bot room: public, with CPU tanks already seated.
+      const bots = parseInt(params.get("cpu"), 10);
+      const level = parseInt(params.get("diff"), 10);
+      const open = params.has("public");
       params.delete("public");
+      params.delete("cpu");
+      params.delete("diff");
       params.delete("host");
       const rest = params.toString();
       history.replaceState(null, "", location.pathname + (rest ? "?" + rest : ""));
       game.playMode = "online";
       game.onlineRole = "host";
-      game.hostOnline();
+      if (open && bots >= 1) {
+        game.hostBotRoom(bots, level >= 0 ? level : 1);
+      } else {
+        if (open) game.netPublic = true;
+        game.hostOnline();
+      }
     }
   }
 
@@ -5944,6 +6142,7 @@
   }
   function frame(now) {
     advance(now, 0.05);
+    syncChatBox();
     game.draw();
     requestAnimationFrame(frame);
   }

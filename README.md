@@ -182,7 +182,15 @@ A host can put a room on a public list, so people who don't know each other can 
 - The list shows on the front page (the **PUBLIC ROOMS** section, with a JOIN button per room) and on the game's **JOIN** screen under the code boxes: click a row, or press **↓** to pick one and **Enter** to join.
 - Each entry shows the invite code, how many players are in, and any CPU tanks and their difficulty.
 
+**Bot rooms.** So the list is never a dead end, three bot rooms are always offered under it, on the front page and on the join screen: **WARM-UP** (1 CPU, easy), **SKIRMISH** (2 CPU, normal) and **BRAWL** (3 CPU, hard). They are labelled as bot rooms. Picking one opens a real public room of your own with the CPU tanks already seated (`play.html?host&public&cpu=2&diff=1`). You can press START against the bots at once; until you do, the room is on the public list, and any human who joins takes a bot's seat.
+
 There is still no game server. One browser holds the list: whoever first registers a well-known ID with the PeerJS broker. Everyone else connects to that browser to read the list or to add a room. When the holder leaves, the others notice and one takes over, and hosts put their rooms back; the list can be blank for a few seconds while that happens. Entries are checked on the way in and out, but anyone can post one, so a listed code is only a claim: a made-up room simply fails to connect.
+
+### Chat
+
+Every online room has a chat box under the screen, from the room screen through the whole series. Click it or press **/** to type, **Enter** to send, **Esc** to hand the keys back to the game. While the box has the keyboard, nothing you type moves your tank. The newest lines show at the bottom-left of the screen for ten seconds; open the box to see the last thirty.
+
+Guests send lines to the host, and the host stamps each one with the sender's seat before passing it on, so nobody can speak as someone else. Lines are plain text, cut to 80 characters, and a seat can send one every half second. There is no word filter and no way to mute a player yet.
 
 How it plays:
 
@@ -231,6 +239,7 @@ A centered hit kills. A graze takes a chunk and prints the damage. An HE bomb on
 | **Space** or **Enter** | Fire. During a CPU turn, skip straight to the shot |
 | **T** | Toggle the dotted arc while you have guidance. Firing with it on spends one charge. With none left, the banner says NO GUIDANCE |
 | **M** | Mute / unmute all sound |
+| **/** | Online: jump to the chat box (Enter sends, Esc returns to the game) |
 | **V** | Switch between the 2D and 3D views |
 | **Q / E** | In 3D, turn the camera left / right |
 | **Esc** | Back to the title (ends the series). In full screen, the first Esc only leaves full screen |
