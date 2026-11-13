@@ -10,7 +10,7 @@
 
 Remember the family 386? The fan noise, the beige box, sixteen glorious colors, and a little tank parked on a brown hill. You nudged the barrel up a few degrees, cranked the power, held your breath, and fired. The shell sailed over the mountain, caught a gust you forgot about, and landed squarely on your own head.
 
-**One Hill** brings that afternoon back, in your browser. It's a tribute to Kenny Morse's 1990 MS-DOS shareware classic *Tank Wars* / *Tank Wars 2.5*: VGA palette, turn-based shots, wind, and craters that stay where you dug them. It isn't a pixel-perfect clone, and it definitely isn't a 3D remake. No install, no account, no DOSBox.
+**One Hill** brings that afternoon back, in your browser. It's a tribute to Kenny Morse's 1990 MS-DOS shareware classic *Tank Wars* / *Tank Wars 2.5*: VGA palette, turn-based shots, wind, and craters that stay where you dug them. It isn't a pixel-perfect clone, and it isn't a 3D remake either, though there is a 3D switch if you want to walk around the hill. No install, no account, no DOSBox.
 
 ```text
 C:\> CD ONEHILL
@@ -30,6 +30,8 @@ What's on the hill:
 - **Bragging rights.** Finish a series and the game hands you a result card of the final blow, ready to post.
 - **Bleeps and booms.** Every sound is synthesized live in the browser with Web Audio oscillators and noise.
 - **1990 or 2026.** Flip the switch in the menu bar and the whole thing, front page and game, jumps 36 years: dot-matrix type, warm-gray hardware, black ink, one signal orange, and rounder synth sounds. Same hill, same physics, same opponents.
+- **2D or 3D.** Flip the other switch and the flat hill tips back into a diorama: a slab of ground with a cut face, blocky tanks, and a camera that leans toward the action. Same game underneath.
+- **Great shots get a fanfare.** Land one from across the map, off the top of the screen, through a gale, or into two tanks at once, and the game stops to say so.
 
 All graphics and sounds are original. Nothing was copied from the DOS binaries.
 
@@ -90,6 +92,20 @@ The **1990 · 2026** keys in the menu bar (on the front page and above the game)
 
 The choice is remembered, other open tabs follow along, and a link with `?era=2026` (or `?era=1990`) opens in that era. Only the drawing and the sounds change, so an online match works with players in different eras.
 
+## 2D / 3D
+
+<p align="center">
+  <img src="img/readme/game-3d.png" alt="3D view in 1990 mode: the hill as a slab of green-topped brown ground under a night sky, with small blocky tanks on it and the camera turned to one side" width="640" />
+</p>
+
+The **2D · 3D** keys next to the era switch (or **V** in the game) change how the battlefield is drawn. In 3D the hill is a slab of ground seen from a camera that leans toward whoever is aiming and follows the shell. **Q** and **E** turn the camera yourself.
+
+- Only the drawing changes. Shells still fly in the flat plane down the middle of the slab, so the rules, the AI and online play are identical, and players in one room can each pick their own view.
+- Aiming with the mouse works the same: the pointer is traced back onto the battlefield through the camera.
+- It works in both eras. 1990 gets hard-edged, banded, low-resolution polygons; 2026 gets smooth charcoal.
+- It needs WebGL2. Where that is missing the switch is hidden and the game stays flat.
+- The choice is remembered, and `?view=3d` (or `?view=2d`) picks it from a link. The attract-mode monitor on the front page stays flat.
+
 ## Front page
 
 `index.html` is a landing page built as a cross-section of the battlefield: a night sky and hill on top, then one soil layer per section down to bedrock, with the content in DOS-style text-mode windows.
@@ -107,6 +123,7 @@ Links that work on `play.html`:
 | `play.html?host` | a new online room straight away |
 | `play.html?room=K7Q4M` | the join screen, already dialling that room |
 | `play.html?demo` | attract mode, CPU vs CPU |
+| `play.html?view=3d` | the game in the 3D view (works with the others) |
 
 A `?room=` link that lands on `index.html` is forwarded to the game.
 
@@ -202,9 +219,28 @@ A centered hit kills. A graze takes a chunk and prints the damage. An HE bomb on
 | **Space** or **Enter** | Fire. During a CPU turn, skip straight to the shot |
 | **T** | Toggle the dotted arc while you have guidance. Firing with it on spends one charge. With none left, the banner says NO GUIDANCE |
 | **M** | Mute / unmute all sound |
+| **V** | Switch between the 2D and 3D views |
+| **Q / E** | In 3D, turn the camera left / right |
 | **Esc** | Back to the title (ends the series). In full screen, the first Esc only leaves full screen |
 
 A **READY?** banner flashes on each turn. A near miss prints **CLOSE!** and a shield prints **BLOCKED**. Wind is in the top bar (`<<<` west, `>>>` east). It changes every turn, sometimes completely, so an aim that hit last time usually needs adjusting. A big change flashes **WIND SHIFT**. Explosions bite craters; tanks fall if the dirt under them disappears. The bottom strip shows the map, series score, cash, shields, and guidance.
+
+### Great shots
+
+Some hits earn a headline, a burst of sparks at the impact, a fanfare, and a moment of slow motion (no slow motion online, so every screen stays in step):
+
+| Headline | What it takes |
+| --- | --- |
+| **BULLSEYE!** | A dead-center hit the tank survives |
+| **DEAD CENTER!** | A dead-center hit that kills a tank at full strength |
+| **LUCKY HIT!** | A kill from the very edge of the blast |
+| **WIND RIDER!** | A dead-center hit through wind of 7 or more |
+| **LONG SHOT!** | A hit on a tank at least two thirds of the map away |
+| **FROM ORBIT!** | A hit with a shell that went well off the top of the screen |
+| **DOUBLE KILL!** / **TRIPLE KILL!** | One shot (MIRV shells count together) that ends two or three tanks |
+| **OWN GOAL!** | Your own shell ends your own tank |
+
+Long, high and windy shots count for more when they also kill. With reduced motion turned on, the headline still appears but nothing zooms or slows down.
 
 ### Loot crates
 
@@ -282,6 +318,7 @@ js/landing.js   front page toys (shootable logo, attract monitor, join box, blas
 play.html       the game page
 styles.css      game page: menu bar, monitor bezel, pixel scaling, 2026 section at the end
 js/net.js       online transport (PeerJS loader, invite codes, peer links)
+js/view3d.js    the 3D view: a small WebGL2 renderer that draws the same field as a diorama
 js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
 favicon.svg     pixel tank icon (favicon.ico and img/icon-*.png are the same tank as PNGs)
 robots.txt      lets every crawler in and points to the sitemap

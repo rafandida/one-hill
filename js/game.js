@@ -651,6 +651,15 @@
       src.stop(t + dur);
     },
 
+    /** A rising run for a shot worth cheering; a falling one for blowing yourself up. */
+    cheer: function (tier, own) {
+      const wave = MODERN ? "triangle" : "square";
+      if (own) this.notes([392, 330, 262, 196], 95, 0.16, 0.05, MODERN ? "triangle" : "sawtooth");
+      else if (tier >= 3) this.notes([523, 659, 784, 1047, 1319, 1568], 70, 0.18, 0.05, wave);
+      else if (tier === 2) this.notes([523, 659, 784, 1047], 75, 0.16, 0.05, wave);
+      else this.notes([784, 1047], 80, 0.12, 0.04, wave);
+    },
+
     notes: function (freqs, step, dur, vol, type) {
       for (let i = 0; i < freqs.length; i++) {
         const f = freqs[i];
@@ -928,6 +937,9 @@
       weapon: weapon,
       owner: tank,
       trail: [],
+      // Where it was fired from and how high it has been, for calling great shots.
+      sx: tank.x,
+      top: oy,
       armed: false,
       dist: 0,
       split: false,
@@ -972,7 +984,65 @@
     callout(game, cx, cy - 16, "MOUND", C.green);
   }
 
-  function applyBlast(game, cx, cy, weapon, owner) {
+  // ---------------------------------------------------------------------------
+  // Great shots. A hit that deserves more than a damage number gets a headline,
+  // a flourish at the point of impact, a fanfare, and a beat of slow motion.
+  // Every screen in an online game works these out from the same shot, so
+  // nothing is sent; slow motion is skipped there to keep the clocks together.
+  // ---------------------------------------------------------------------------
+  /** What a hit earned, if anything: { text, tier } with tier 1 (nice) to 4 (legendary). */
+  function featOf(game, victim, owner, shot, hit) {
+    if (!owner) return null;
+    const dead = !victim.alive;
+    if (victim === owner) return dead ? { text: "OWN GOAL", tier: 2, own: true } : null;
+    const windy = hit.direct && Math.abs(game.wind) >= 7;
+    const orbit = !!shot && shot.top < PLAY_TOP - 100;
+    const far = !!shot && Math.abs(victim.x - shot.sx) >= 420;
+    if (dead) game.volleyKills++;
+    if (dead && game.volleyKills >= 3) return { text: "TRIPLE KILL", tier: 4 };
+    if (dead && game.volleyKills === 2) return { text: "DOUBLE KILL", tier: 4 };
+    // The same feats count for less when the tank survives them.
+    const tier = dead ? 3 : 2;
+    if (orbit) return { text: "FROM ORBIT", tier: tier };
+    if (far) return { text: "LONG SHOT", tier: tier };
+    if (windy) return { text: "WIND RIDER", tier: tier };
+    if (!dead) return hit.direct ? { text: "BULLSEYE", tier: 1 } : null;
+    if (!hit.direct && hit.falloff < 0.3) return { text: "LUCKY HIT", tier: 2 };
+    if (hit.direct && hit.full) return { text: "DEAD CENTER", tier: 2 };
+    return null;
+  }
+
+  function cheer(game, feat, x, y, owner) {
+    const big = feat.tier >= 2;
+    game.cheer = {
+      text: feat.text + "!",
+      who: owner.name,
+      color: feat.own ? C.lred : owner.color,
+      tier: feat.tier,
+      own: !!feat.own,
+      x: x,
+      y: y,
+      t: 0,
+      life: big ? 1.9 : 1.1,
+    };
+    if (!feat.own) {
+      burst(game, x, y - 6, 8 + feat.tier * 8, {
+        colors: [owner.color, C.white, C.yellow],
+        spd: 110 + feat.tier * 30,
+        up: 130,
+        life: 0.95,
+        sz: 2,
+      });
+    }
+    if (big && !REDUCE_MOTION) {
+      if (!game.net) game.slowmo = 0.3 + feat.tier * 0.08;
+      game.punch = 1;
+      if (game.v3) game.v3.punch(x);
+    }
+    Sfx.cheer(feat.tier, feat.own);
+  }
+
+  function applyBlast(game, cx, cy, weapon, owner, shot) {
     const r = weapon.radius;
     excavate(game.height, cx, cy, r);
     burst(game, cx, cy, Math.round(10 + r * 0.7), {
@@ -991,6 +1061,7 @@
     addShake(game, r > 36 ? 10 : r > 20 ? 6 : 3.2);
 
     let punched = false;
+    let feat = null;
     for (let i = 0; i < game.tanks.length; i++) {
       const t = game.tanks[i];
       if (!t.alive) continue;
@@ -1003,8 +1074,13 @@
         const direct = falloff > 0.82;
         let dmg = Math.round(weapon.damage * (0.35 + 0.65 * falloff));
         if (direct) dmg = Math.round(dmg * 1.35);
+        const full = t.hp >= MAX_HP;
         const res = hurt(game, t, dmg, owner, direct);
-        if (res === "hit") punched = true;
+        if (res === "hit") {
+          punched = true;
+          const f = featOf(game, t, owner, shot, { direct: direct, falloff: falloff, full: full });
+          if (f && (!feat || f.tier > feat.tier)) feat = f;
+        }
       } else if (d < reach + 40) {
         if (game.dailyShot && !t.human) game.dailyShot.close = true;
         callout(game, t.x, t.y - 24, "CLOSE!", C.yellow);
@@ -1012,6 +1088,7 @@
       }
     }
     if (punched) addShake(game, r > 20 ? 8 : 5);
+    if (feat) cheer(game, feat, cx, cy, owner);
     // Tanks never drive, so a crate is claimed by shooting it: one caught in
     // the blast goes to whoever fired.
     for (let i = game.crates.length - 1; i >= 0; i--) {
@@ -1202,6 +1279,7 @@
         p.x += p.vx * sdt;
         p.y += p.vy * sdt;
         p.dist += Math.hypot(p.vx, p.vy) * sdt;
+        if (p.y < p.top) p.top = p.y;
         if (!p.armed && p.dist > 16) p.armed = true;
 
         p.trail.push(p.x, p.y);
@@ -1218,12 +1296,16 @@
           spawnShot(game, p.owner, WEAPONS[0], p.x, p.y, 0, 0, {
             vx: p.vx - 55,
             vy: p.vy + 8,
+            sx: p.sx,
+            top: p.top,
             armed: true,
             weapon: WEAPONS[0],
           });
           spawnShot(game, p.owner, WEAPONS[0], p.x, p.y, 0, 0, {
             vx: p.vx + 55,
             vy: p.vy + 8,
+            sx: p.sx,
+            top: p.top,
             armed: true,
             weapon: WEAPONS[0],
           });
@@ -1246,7 +1328,7 @@
           for (let t = 0; t < game.tanks.length; t++) {
             if (tankHit(game.tanks[t], p.x, p.y, 1)) {
               if (p.weapon.kind === "mound") applyMound(game, p.x, p.y, p.weapon);
-              else applyBlast(game, p.x, p.y, p.weapon, p.owner);
+              else applyBlast(game, p.x, p.y, p.weapon, p.owner, p);
               p.dead = true;
               break;
             }
@@ -1255,7 +1337,7 @@
             if (!crateHit(game.crates[k], p.x, p.y)) continue;
             claimCrate(game, k, p.owner);
             if (p.weapon.kind === "mound") applyMound(game, p.x, p.y, p.weapon);
-            else applyBlast(game, p.x, p.y, p.weapon, p.owner);
+            else applyBlast(game, p.x, p.y, p.weapon, p.owner, p);
             p.dead = true;
           }
           if (p.dead) break;
@@ -1278,12 +1360,12 @@
           }
           p.digLeft -= sdt;
           if (p.digLeft <= 0) {
-            applyBlast(game, p.x, p.y, p.weapon, p.owner);
+            applyBlast(game, p.x, p.y, p.weapon, p.owner, p);
             p.dead = true;
           }
         } else if (inDirt) {
           if (p.weapon.kind === "mound") applyMound(game, p.x, p.y, p.weapon);
-          else applyBlast(game, p.x, p.y, p.weapon, p.owner);
+          else applyBlast(game, p.x, p.y, p.weapon, p.owner, p);
           p.dead = true;
         }
       }
@@ -1483,6 +1565,15 @@
     this.dailyShot = null;
     this.dailyInfo = null;
     this.savedDifficulty = 1;
+    // 3D view (js/view3d.js): wanted, the renderer, and whether this frame used it.
+    this.view3d = false;
+    this.v3 = null;
+    this.in3d = false;
+    // Great-shot celebration: the headline, slow motion left, zoom punch, kills this shot.
+    this.cheer = null;
+    this.slowmo = 0;
+    this.punch = 0;
+    this.volleyKills = 0;
 
     this.rebuildStars();
   }
@@ -1690,6 +1781,9 @@
     this.roundLines = [];
     this.wind = wind;
     this.windShift = false;
+    this.cheer = null;
+    this.slowmo = 0;
+    this.punch = 0;
 
     this.tanks = [];
     for (let i = 0; i < this.roster.length; i++) {
@@ -2073,6 +2167,7 @@
       this.netSend({ t: "fire", seq: this.turnSeq, id: tank.id, a: tank.angle, p: tank.power, w: tank.weapon, g: guide });
     }
     const m = muzzle(tank);
+    this.volleyKills = 0;
     spawnShot(this, tank, WEAPONS[tank.weapon], m.x, m.y, tank.angle, tank.power);
     burst(this, m.x, m.y, 7, {
       colors: [C.yellow, C.white, C.lred],
@@ -2249,6 +2344,7 @@
       Sfx.muted = !Sfx.muted;
       Sfx.ui();
     }
+    if (consume("v") || consume("V")) this.setView(!this.view3d);
   };
 
   Game.prototype.startFromTitle = function () {
@@ -2299,6 +2395,15 @@
   };
 
   Game.prototype.tick = function (dt) {
+    if (this.cheer) {
+      this.cheer.t += dt;
+      if (this.cheer.t >= this.cheer.life) this.cheer = null;
+    }
+    if (this.punch > 0) this.punch = Math.max(0, this.punch - dt * 2.2);
+    if (this.slowmo > 0) {
+      this.slowmo -= dt;
+      dt *= 0.28;
+    }
     this.time += dt;
     if (this.bannerT > 0) this.bannerT -= dt;
     if (this.captureIn > 0) {
@@ -2340,6 +2445,7 @@
       Sfx.muted = !Sfx.muted;
       Sfx.ui();
     }
+    if (consume("v") || consume("V")) this.setView(!this.view3d);
 
     if (consume("Escape") || consume("Esc")) {
       this.toTitle();
@@ -3692,7 +3798,7 @@
     for (let i = 0; i < this.tanks.length; i++) {
       const t = this.tanks[i];
       if (this.mode === "drop" && !t.dropped && t.y < PLAY_TOP) continue;
-      drawTankSprite(ctx, t);
+      if (!this.in3d) drawTankSprite(ctx, t);
       if (this.net && t.alive && t.id === this.net.seat) {
         const myTurn = this.mode === "aim" && this.current() === t;
         if (myTurn && Math.floor(this.time * 4) % 2) continue;
@@ -3700,7 +3806,8 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = t.color;
-        ctx.fillText("YOU", Math.round(t.x), Math.round(t.y) - 24);
+        const tag = this.fieldToScreen(t.x, t.y - 24);
+        ctx.fillText("YOU", Math.round(tag.x), Math.round(tag.y));
       }
     }
   };
@@ -3929,17 +4036,26 @@
     if (!this.isLocal(tank)) return;
     const rad = (tank.angle * Math.PI) / 180;
     const m = muzzle(tank);
+    const from = this.fieldToScreen(m.x, m.y);
+    const to = this.fieldToScreen(m.x + Math.cos(rad) * 22, m.y - Math.sin(rad) * 22);
     ctx.strokeStyle = tank.color;
     ctx.globalAlpha = 0.55;
     ctx.setLineDash([2, 3]);
     ctx.beginPath();
-    ctx.moveTo(m.x, m.y);
-    ctx.lineTo(m.x + Math.cos(rad) * 22, m.y - Math.sin(rad) * 22);
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
     const pts = previewArc(tank, this.wind, this.height, this.water);
+    if (this.in3d) {
+      for (let i = 0; i < pts.length; i += 2) {
+        const q = this.fieldToScreen(pts[i], pts[i + 1]);
+        pts[i] = q.x;
+        pts[i + 1] = q.y;
+      }
+    }
     const full = this.previewOn && tank.guidance > 0;
     const limit = full ? pts.length : Math.min(pts.length, 8);
     if (MODERN) {
@@ -3997,7 +4113,7 @@
   Game.prototype.drawMenuPanel = function (ctx) {
     if (!this.height) this.height = generateHeightmap(W, Math.random);
     this.drawSky(ctx);
-    this.drawTerrain(ctx);
+    if (!this.drawField3D(ctx, PLAY_H, true)) this.drawTerrain(ctx);
     if (MODERN) {
       panel(ctx, 70, 44, 500, 312, 8);
       return;
@@ -4075,7 +4191,7 @@
     ctx.fillStyle = C.gray;
     ctx.font = font(11);
     ctx.fillText("Drag to aim. A short arc is free.  A clean hit ends a tank.", W / 2, 278);
-    ctx.fillText("A/D angle  W/S power  SPACE fire  1-6 weapons  T arc  M mute", W / 2, 298);
+    ctx.fillText("A/D angle  W/S power  SPACE fire  1-6 weapons  T arc  M mute" + (window.TankView3D && window.TankView3D.supported ? "  V 3D" : ""), W / 2, 298);
     ctx.fillStyle = C.dgray;
     ctx.fillText("Kills pay. Shoot crates for loot. Water swallows shells.", W / 2, 322);
   };
@@ -4586,15 +4702,16 @@
     ctx.textBaseline = "middle";
     for (let i = 0; i < this.callouts.length; i++) {
       const c = this.callouts[i];
+      const at = this.fieldToScreen(c.x, c.y);
       ctx.globalAlpha = 1 - c.t / c.life;
       if (MODERN) {
         ctx.strokeStyle = PAPER;
         ctx.lineWidth = 3;
         ctx.lineJoin = "round";
-        ctx.strokeText(c.text, c.x, c.y);
+        ctx.strokeText(c.text, at.x, at.y);
       }
       ctx.fillStyle = c.color;
-      ctx.fillText(c.text, c.x, c.y);
+      ctx.fillText(c.text, at.x, at.y);
     }
     ctx.globalAlpha = 1;
   };
@@ -4633,14 +4750,29 @@
     ctx.clip();
     ctx.translate(sx, sy);
     this.drawSky(ctx);
-    this.drawTerrain(ctx);
-    this.drawCrates(ctx);
+    // A great shot pushes the flat picture in toward the hit (3D moves its camera instead).
+    if (this.punch > 0 && this.cheer && !this.view3d) {
+      const z = 1 + 0.07 * this.punch * this.punch;
+      ctx.translate(this.cheer.x, this.cheer.y);
+      ctx.scale(z, z);
+      ctx.translate(-this.cheer.x, -this.cheer.y);
+    }
+    // In 3D the hill and everything on it is one picture; labels and the aim
+    // guide are still drawn flat, on top.
+    const flat = !this.drawField3D(ctx, H - PLAY_TOP - FOOT, false);
+    if (flat) {
+      this.drawTerrain(ctx);
+      this.drawCrates(ctx);
+    }
     this.drawTanks(ctx);
     this.drawAimGuide(ctx);
-    this.drawShots(ctx);
-    this.drawExplosions(ctx);
-    this.drawParticles(ctx);
+    if (flat) {
+      this.drawShots(ctx);
+      this.drawExplosions(ctx);
+      this.drawParticles(ctx);
+    }
     this.drawCallouts(ctx);
+    this.drawCheerMark(ctx);
     ctx.restore();
     // The share card's photo: playfield only, before the HUD and banners.
     if (this.captureNext) {
@@ -4652,7 +4784,186 @@
     this.drawWeaponBar(ctx);
     if (this.net) this.drawNetStatus(ctx);
     this.drawBanner(ctx);
+    this.drawCheer(ctx);
     if (this.mode === "victory") this.drawVictory(ctx);
+  };
+
+  /** Rings and rays thrown out from the point of a great shot. */
+  Game.prototype.drawCheerMark = function (ctx) {
+    const c = this.cheer;
+    if (!c || c.own || c.t > 0.7) return;
+    const at = this.fieldToScreen(c.x, c.y);
+    const k = c.t / 0.7;
+    const out = 1 - (1 - k) * (1 - k);
+    const reach = 26 + c.tier * 16;
+    ctx.save();
+    ctx.globalAlpha = 1 - k;
+    ctx.strokeStyle = MODERN ? C.black : C.white;
+    ctx.lineWidth = MODERN ? 1.2 : 2;
+    for (let i = 0; i < 2; i++) {
+      const r = reach * out * (1 - i * 0.35);
+      ctx.beginPath();
+      ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const rays = 6 + c.tier * 2;
+    ctx.strokeStyle = MODERN ? C.yellow : c.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < rays; i++) {
+      const a = (i / rays) * Math.PI * 2 + 0.3;
+      const r0 = reach * (0.35 + out * 0.75);
+      const r1 = r0 + reach * 0.45 * (1 - k);
+      ctx.moveTo(at.x + Math.cos(a) * r0, at.y + Math.sin(a) * r0);
+      ctx.lineTo(at.x + Math.cos(a) * r1, at.y + Math.sin(a) * r1);
+    }
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  /** The headline for a great shot: slams in, holds, fades. Small ones pop up over the hit. */
+  Game.prototype.drawCheer = function (ctx) {
+    const c = this.cheer;
+    if (!c) return;
+    const big = c.tier >= 2;
+    const slam = REDUCE_MOTION ? 1 : Math.min(1, c.t / 0.16);
+    const left = c.life - c.t;
+    const alpha = Math.min(1, left / 0.3) * Math.min(1, c.t / 0.05);
+    let scale = 1 + (1 - slam) * (1 - slam) * (big ? 1.8 : 0.8);
+    // A little bounce after it lands.
+    if (slam >= 1 && !REDUCE_MOTION) scale += Math.sin((c.t - 0.16) * 30) * 0.05 * Math.exp(-(c.t - 0.16) * 9);
+    let x = W / 2;
+    let y = PLAY_TOP + 84;
+    if (!big) {
+      const at = this.fieldToScreen(c.x, c.y);
+      x = clamp(at.x, 70, W - 70);
+      y = clamp(at.y - 46, PLAY_TOP + 40, H - FOOT - 20);
+    }
+    const size = big ? 26 + Math.min(4, c.tier) * 2 : 15;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, PLAY_TOP, W, H - PLAY_TOP - FOOT);
+    ctx.clip();
+    ctx.translate(x, y);
+    ctx.globalAlpha = alpha;
+
+    if (big && !c.own) {
+      // A slow fan of rays behind the words.
+      const spin = REDUCE_MOTION ? 0 : c.t * 0.5;
+      ctx.fillStyle = MODERN ? C.yellow : c.color;
+      ctx.globalAlpha = alpha * (MODERN ? 0.16 : 0.22) * Math.min(1, c.t / 0.25);
+      const fan = 12;
+      const len = 150 + c.tier * 14;
+      for (let i = 0; i < fan; i++) {
+        const a = (i / fan) * Math.PI * 2 + spin;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a - 0.09) * len, Math.sin(a - 0.09) * len * 0.55);
+        ctx.lineTo(Math.cos(a + 0.09) * len, Math.sin(a + 0.09) * len * 0.55);
+        ctx.fill();
+      }
+      ctx.globalAlpha = alpha;
+    }
+
+    ctx.scale(scale, scale);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = font(size, true);
+    if (MODERN) {
+      const w = ctx.measureText(c.text).width + 28;
+      const h = size + 14;
+      roundPath(ctx, -w / 2, -h / 2 + 3, w, h, 7);
+      ctx.fillStyle = c.own ? C.lred : C.yellow;
+      ctx.fill();
+      roundPath(ctx, -w / 2, -h / 2, w, h, 7);
+      ctx.fillStyle = C.black;
+      ctx.fill();
+      ctx.fillStyle = PAPER;
+      ctx.fillText(c.text, 0, 1);
+    } else {
+      const blink = Math.floor(c.t * 12) % 3;
+      ctx.fillStyle = C.black;
+      ctx.fillText(c.text, 3, 3);
+      ctx.fillStyle = c.own ? C.lred : blink === 0 ? C.white : blink === 1 ? C.yellow : c.color;
+      ctx.fillText(c.text, 0, 0);
+    }
+    if (big) {
+      const line = c.own ? c.who + " TAKES THEMSELVES OUT" : "— " + c.who + " —";
+      ctx.font = font(12, true);
+      const sy = size / 2 + 16;
+      if (MODERN) {
+        ctx.strokeStyle = PAPER;
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.strokeText(line, 0, sy);
+      } else {
+        ctx.fillStyle = C.black;
+        ctx.fillText(line, 1, sy + 1);
+      }
+      ctx.fillStyle = c.color;
+      ctx.fillText(line, 0, sy);
+    }
+    ctx.restore();
+  };
+
+  // ---------------------------------------------------------------------------
+  // 2D / 3D. The 3D view (js/view3d.js) is another way of drawing the same
+  // field: the game still plays out on a flat plane, and anything that reads a
+  // screen position (labels, the aim guide, the pointer) converts through the
+  // two helpers below.
+  // ---------------------------------------------------------------------------
+  const VIEW_KEY = "tankwars-view";
+  const REDUCE_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  Game.prototype.setView = function (on) {
+    on = !!(on && window.TankView3D && window.TankView3D.supported);
+    if (on === this.view3d) return;
+    this.view3d = on;
+    if (on) {
+      if (!this.v3) this.v3 = window.TankView3D.create({ W: W, H: H });
+      this.v3.enter(!REDUCE_MOTION && !this.demo);
+    }
+    if (this.onViewChange) this.onViewChange(on);
+  };
+
+  /** Draws the hill in 3D over the sky. False when the flat drawing should be used instead. */
+  Game.prototype.drawField3D = function (ctx, fieldH, backdrop) {
+    this.in3d = false;
+    if (!this.view3d || !this.v3) return false;
+    let focusX = W / 2;
+    if (this.shots.length) focusX = this.shots[0].x;
+    else if (this.mode === "aim" && this.current()) focusX = this.current().x;
+    const typing = this.mode === "join";
+    const pic = this.v3.render(this, {
+      modern: MODERN,
+      scale: this.scale,
+      top: PLAY_TOP,
+      h: fieldH,
+      backdrop: backdrop,
+      pal: C,
+      paper: PAPER,
+      charcoal: CHARCOAL,
+      dust: DUST_2026,
+      time: this.time,
+      focusX: clamp(focusX, 0, W),
+      turn: typing ? 0 : (held("e") ? 1 : 0) - (held("q") ? 1 : 0),
+      reduceMotion: REDUCE_MOTION,
+    });
+    if (!pic) return false;
+    ctx.drawImage(pic, 0, PLAY_TOP, W, fieldH);
+    this.in3d = !backdrop;
+    return true;
+  };
+
+  /** Where a point on the field is drawn. */
+  Game.prototype.fieldToScreen = function (x, y) {
+    return this.in3d ? this.v3.project(x, y, 0) : { x: x, y: y };
+  };
+
+  /** The point on the field under a screen position. */
+  Game.prototype.screenToField = function (p) {
+    return this.in3d ? this.v3.unproject(p.x, p.y) : p;
   };
 
   // ---------------------------------------------------------------------------
@@ -4690,9 +5001,11 @@
     recolor(this.roster, ["color", "dim"], true);
     recolor(this.roundLines, ["color"], true);
     recolor(this.callouts, ["color"]);
+    if (this.cheer) recolor([this.cheer], ["color"], true);
     recolor(this.particles, ["c"]);
     recolor(this.stars, ["c"]);
     this.paperSky = null;
+    if (this.v3) this.v3.invalidate();
     // The canvas draws every frame, so 2026 text switches over once the fonts arrive.
     if (MODERN && document.fonts && document.fonts.load) {
       document.fonts.load(font(12));
@@ -5235,8 +5548,9 @@
     const prevA = Math.round(tank.angle);
     const prevP = Math.round(tank.power);
     const pivotY = tank.y - 8;
-    let ang = (Math.atan2(pivotY - p.y, p.x - tank.x) * 180) / Math.PI;
-    if (ang < 0) ang = p.x < tank.x ? 180 : 0;
+    const at = this.screenToField(p);
+    let ang = (Math.atan2(pivotY - at.y, at.x - tank.x) * 180) / Math.PI;
+    if (ang < 0) ang = at.x < tank.x ? 180 : 0;
     tank.angle = clamp(ang, 0, 180);
     tank.power = clamp(this.pointer.power + (this.pointer.sy - p.y) * 0.55, 10, maxPowerFor(tank));
     if (Math.round(tank.angle) !== prevA || Math.round(tank.power) !== prevP) Sfx.tick();
@@ -5372,6 +5686,42 @@
       game.setEra(era);
     });
   }
+
+  // 2D / 3D (js/view3d.js). The switch only shows where WebGL2 is available.
+  // The choice is remembered and ?view=3d picks it; attract mode on the front
+  // page stays flat unless its link says otherwise.
+  const viewSwitch = document.querySelector(".view-switch");
+  const viewPicks = document.querySelectorAll("[data-view-pick]");
+  if (window.TankView3D && window.TankView3D.supported) {
+    if (viewSwitch) viewSwitch.hidden = false;
+    game.onViewChange = function (on) {
+      for (let i = 0; i < viewPicks.length; i++) {
+        viewPicks[i].setAttribute("aria-pressed", String((viewPicks[i].dataset.viewPick === "3d") === on));
+      }
+      try {
+        if (!game.demo) localStorage.setItem(VIEW_KEY, on ? "3d" : "2d");
+      } catch (e) {
+        /* the switch still works for this page */
+      }
+    };
+    for (let i = 0; i < viewPicks.length; i++) {
+      viewPicks[i].addEventListener("click", function () {
+        game.setView(viewPicks[i].dataset.viewPick === "3d");
+        canvas.focus();
+      });
+    }
+    let view = params.get("view");
+    if (view !== "2d" && view !== "3d" && !game.demo) {
+      try {
+        view = localStorage.getItem(VIEW_KEY);
+      } catch (e) {
+        view = null;
+      }
+    }
+    game.setView(view === "3d");
+    if (game.v3) game.v3.enter(false);
+  }
+
   let resizing = 0;
   window.addEventListener("resize", function () {
     clearTimeout(resizing);
