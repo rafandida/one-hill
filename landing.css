@@ -1101,6 +1101,18 @@ code {
   border-top: 2px solid rgba(255, 255, 255, 0.18);
 }
 
+.rooms-head-bots {
+  margin-top: 18px !important;
+}
+
+.rooms-note {
+  margin: 4px 0 0 !important;
+  padding-top: 8px;
+  font-size: 19px;
+  color: var(--lcyan);
+  border-top: 2px solid rgba(255, 255, 255, 0.18);
+}
+
 .rooms-steps {
   margin-top: 26px;
 }
@@ -2554,4 +2566,11 @@ kbd.down {
 
 [data-era="2026"] .rooms-who {
   color: inherit;
+}
+
+[data-era="2026"] .rooms-note {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  border-top: 1px solid var(--rule);
 }

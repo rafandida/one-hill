@@ -44,8 +44,8 @@
     <link rel="icon" href="img/icon-192.png" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
     <link rel="manifest" href="site.webmanifest" />
-    <script src="js/era.js?v=20261113b"></script>
-    <link rel="stylesheet" href="styles.css?v=20261113b" />
+    <script src="js/era.js?v=20261113c"></script>
+    <link rel="stylesheet" href="styles.css?v=20261113c" />
   </head>
   <body>
     <h1 class="sr-only">Play One Hill, a Tank Wars tribute</h1>
@@ -65,14 +65,19 @@
     <div id="monitor">
       <canvas id="game" width="640" height="400" aria-label="One Hill game"></canvas>
     </div>
+    <form id="chat" autocomplete="off" hidden>
+      <label class="sr-only" for="chat-text">Message the room</label>
+      <input id="chat-text" type="text" maxlength="80" enterkeyhint="send" placeholder="Chat with the room. Press / to type, Enter to send." />
+      <button type="submit">SEND</button>
+    </form>
     <p id="hint">
       Click a weapon on the bottom bar, or press 1–6. Drag to aim, click to fire. M mute.
       V switches 2D / 3D; in 3D, Q and E turn the camera.
       Pick ONLINE on the title screen to play friends with an invite code.
       <a href="./">One Hill home</a>
     </p>
-    <script src="js/net.js?v=20261113b"></script>
-    <script src="js/view3d.js?v=20261113b"></script>
-    <script src="js/game.js?v=20261113b"></script>
+    <script src="js/net.js?v=20261113c"></script>
+    <script src="js/view3d.js?v=20261113c"></script>
+    <script src="js/game.js?v=20261113c"></script>
   </body>
 </html>

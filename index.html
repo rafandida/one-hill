@@ -80,6 +80,8 @@
               "Hotseat multiplayer for 2 to 4 players on one keyboard",
               "Online multiplayer for 2 to 4 players with a five-letter invite code",
               "Public room list: host a public room or join one, no account needed",
+              "Bot rooms that are always open: a public room with CPU tanks already seated",
+              "Text chat in every online room",
               "2D view and 3D diorama view with a camera that follows the shot",
               "Daily Hill: one seeded hill a day, the same for everyone",
               "Weapon shop between hills: HE bombs, MIRVs, diggers, dirt bombs, shields, nukes",
@@ -160,8 +162,8 @@
       }
     </script>
     <link rel="preload" href="fonts/VT323-Regular.woff2" as="font" type="font/woff2" crossorigin />
-    <script src="js/era.js?v=20261113b"></script>
-    <link rel="stylesheet" href="landing.css?v=20261113b" />
+    <script src="js/era.js?v=20261113c"></script>
+    <link rel="stylesheet" href="landing.css?v=20261113c" />
     <script>
       // Invite links that land on the front page go straight to the game.
       if (/[?&]room=/.test(location.search)) location.replace("play.html" + location.search);
@@ -423,6 +425,7 @@
               </li>
               <li><b>INVITE.</b> Send the invite link (one tap on a phone) or just the code.</li>
               <li><b>FIRE.</b> Each turn has a 45-second shot clock. When it hits zero, your current aim goes.</li>
+              <li><b>TALK.</b> Every room has a chat box under the screen. Press <kbd>/</kbd>, type, hit Enter.</li>
             </ol>
             <form class="join" action="play.html" method="get" novalidate>
               <label for="room">GOT A CODE?</label>
@@ -470,7 +473,33 @@
               </p>
               <ul class="rooms-list" data-rooms-list aria-label="Public rooms you can join"></ul>
               <p class="rooms-empty" data-rooms-empty>
-                No public rooms are open right now. Host one, and the next visitor finds you here.
+                No player rooms are open right now. Open a bot room below and you're on this list for the next visitor.
+              </p>
+              <p class="rooms-head rooms-head-bots">
+                <b>BOT ROOMS</b>
+                <span class="rooms-state">Always open</span>
+              </p>
+              <ul class="rooms-list" aria-label="Bot rooms you can open at any time">
+                <li>
+                  <b class="rooms-code">WARM-UP</b>
+                  <span class="rooms-who">You + 1 CPU tank on easy</span>
+                  <a class="btn btn-alt" href="play.html?host&amp;public&amp;cpu=1&amp;diff=0" aria-label="Open the Warm-up bot room">PLAY</a>
+                </li>
+                <li>
+                  <b class="rooms-code">SKIRMISH</b>
+                  <span class="rooms-who">You + 2 CPU tanks on normal</span>
+                  <a class="btn btn-alt" href="play.html?host&amp;public&amp;cpu=2&amp;diff=1" aria-label="Open the Skirmish bot room">PLAY</a>
+                </li>
+                <li>
+                  <b class="rooms-code">BRAWL</b>
+                  <span class="rooms-who">You + 3 CPU tanks on hard</span>
+                  <a class="btn btn-alt" href="play.html?host&amp;public&amp;cpu=3&amp;diff=2" aria-label="Open the Brawl bot room">PLAY</a>
+                </li>
+              </ul>
+              <p class="rooms-note">
+                A bot room is a public room of your own with CPU tanks already in the seats. Start against the bots
+                straight away, or wait a moment: while you wait you're on the list above, and any human who joins takes
+                a bot's seat.
               </p>
             </div>
             <p class="shots-go">
@@ -655,7 +684,7 @@ Send a friend an invite code instead.</pre>
       </div>
     </footer>
 
-    <script src="js/net.js?v=20261113b"></script>
-    <script src="js/landing.js?v=20261113b"></script>
+    <script src="js/net.js?v=20261113c"></script>
+    <script src="js/landing.js?v=20261113c"></script>
   </body>
 </html>

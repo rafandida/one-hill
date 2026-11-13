@@ -18,6 +18,8 @@ Players set a barrel angle and a shot power, allow for wind that changes every t
 - 1 to 4 players: against 1 to 3 CPU tanks (easy, normal, hard), hotseat on one keyboard, or online
 - Online play is peer-to-peer between browsers. Join with a five-letter invite code or an invite link
 - Public rooms: a host can list a room as PUBLIC. Listed rooms appear on the front page and on the game's join screen, and anyone can join one. Rooms are PRIVATE by default
+- Bot rooms: WARM-UP, SKIRMISH and BRAWL are always offered under the room list. Each opens a public room of your own with 1, 2 or 3 CPU tanks already seated; they are labelled as bot rooms
+- Room chat: every online room has a text chat box under the screen (press / to type)
 - 2D view or 3D view (press V, or use the 2D / 3D switch). Rules are identical in both. 3D needs WebGL2
 - Two looks: 1990 (VGA palette, chunky pixels) and 2026 (paper, ink, signal orange)
 - Weapons: shell, HE bomb, MIRV, digger, nuke, dirt bomb, plus shields and guidance
