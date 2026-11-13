@@ -56,6 +56,10 @@
         <button type="button" data-era-pick="1990" aria-pressed="true">1990</button>
         <button type="button" data-era-pick="2026" aria-pressed="false">2026</button>
       </div>
+      <div class="era-switch view-switch" role="group" aria-label="View" hidden>
+        <button type="button" data-view-pick="2d" aria-pressed="true">2D</button>
+        <button type="button" data-view-pick="3d" aria-pressed="false">3D</button>
+      </div>
       <button id="full" type="button" aria-pressed="false" hidden>FULL SCREEN</button>
     </header>
     <div id="monitor">
@@ -63,10 +67,12 @@
     </div>
     <p id="hint">
       Click a weapon on the bottom bar, or press 1–6. Drag to aim, click to fire. M mute.
+      V switches 2D / 3D; in 3D, Q and E turn the camera.
       Pick ONLINE on the title screen to play friends with an invite code.
       <a href="./">One Hill home</a>
     </p>
     <script src="js/net.js"></script>
+    <script src="js/view3d.js"></script>
     <script src="js/game.js"></script>
   </body>
 </html>

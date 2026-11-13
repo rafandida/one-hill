@@ -110,6 +110,15 @@ body {
   background: #0000aa;
 }
 
+.era-switch[hidden] {
+  display: none;
+}
+
+/* 2D / 3D, next to the era keys */
+.view-switch {
+  margin-left: 10px;
+}
+
 #full {
   margin-left: 10px;
   padding: 3px 10px 2px;
@@ -142,6 +151,31 @@ body {
 @media (max-width: 700px) {
   .bar-wide {
     display: none;
+  }
+}
+
+/* Phones: five keys and a link have to share one line. */
+@media (max-width: 480px) {
+  #bar {
+    padding: 0 6px;
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  #bar a,
+  #full {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .view-switch,
+  #full {
+    margin-left: 6px;
+  }
+
+  .era-switch button {
+    padding-left: 5px;
+    padding-right: 5px;
   }
 }
 
@@ -599,4 +633,27 @@ body.demo #bar {
 
 [data-era="2026"] .share-note {
   color: #00875a;
+}
+
+/* Phones: the keys lose their LEDs so all five fit beside the home link. */
+@media (max-width: 480px) {
+  [data-era="2026"] #bar {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+
+  [data-era="2026"] #bar a {
+    padding: 6px 4px;
+  }
+
+  [data-era="2026"] .era-switch button,
+  [data-era="2026"] #full {
+    padding: 5px 6px 4px;
+    font-size: 10px;
+  }
+
+  [data-era="2026"] .era-switch button::before,
+  [data-era="2026"] #full::before {
+    display: none;
+  }
 }
