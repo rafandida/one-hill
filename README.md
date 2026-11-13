@@ -27,6 +27,7 @@ What's on the hill:
 - **A new hill every day.** The Daily Hill gives everyone the same map, wind and bonus kit against LOBBER. Take it in as few shots as you can, then post your row of shots.
 - **Couch warfare.** Hotseat for 2–4 people on one keyboard, with a `LOOK AWAY` screen so nobody peeks at your aim.
 - **Online with a five-letter code.** Send a friend `K7Q4M` and you're on the same hill, peer-to-peer, with no server to run.
+- **Public rooms.** Nobody to send a code to? Set your room to PUBLIC and it shows up in a list on the front page and on the join screen, for anyone to walk into.
 - **Bragging rights.** Finish a series and the game hands you a result card of the final blow, ready to post.
 - **Bleeps and booms.** Every sound is synthesized live in the browser with Web Audio oscillators and noise.
 - **1990 or 2026.** Flip the switch in the menu bar and the whole thing, front page and game, jumps 36 years: dot-matrix type, warm-gray hardware, black ink, one signal orange, and rounder synth sounds. Same hill, same physics, same opponents.
@@ -171,6 +172,17 @@ One hill a day, the same for everyone. Pick **DAILY HILL** on the title screen, 
 1. One player picks **ONLINE → HOST**. The room screen shows a five-letter **invite code** (no I, O, 0 or 1, so it is easy to read out).
 2. Friends either open the **invite link** (`…/play.html?room=K7Q4M`, copied with **C** or the **COPY LINK** button; phones get the share sheet) or pick **ONLINE → JOIN** and type the code. Pasting the code or the whole link works too.
 3. The host can fill empty seats with **CPU TANKS** (and pick their difficulty), then presses **Enter** / **START**. Up to four tanks in total.
+
+### Public rooms
+
+A host can put a room on a public list, so people who don't know each other can find a game:
+
+- On the room screen, switch **ROOM LIST** from PRIVATE to **PUBLIC**. Rooms start PRIVATE, so games with friends stay unlisted. `play.html?host&public` opens a room that is already public.
+- A public room is listed while it has a free human seat and the game hasn't started. It leaves the list when the host presses START, switches back to PRIVATE, or closes the room.
+- The list shows on the front page (the **PUBLIC ROOMS** section, with a JOIN button per room) and on the game's **JOIN** screen under the code boxes: click a row, or press **↓** to pick one and **Enter** to join.
+- Each entry shows the invite code, how many players are in, and any CPU tanks and their difficulty.
+
+There is still no game server. One browser holds the list: whoever first registers a well-known ID with the PeerJS broker. Everyone else connects to that browser to read the list or to add a room. When the holder leaves, the others notice and one takes over, and hosts put their rooms back; the list can be blank for a few seconds while that happens. Entries are checked on the way in and out, but anyone can post one, so a listed code is only a claim: a made-up room simply fails to connect.
 
 How it plays:
 
@@ -317,7 +329,8 @@ js/landing.js   front page toys (shootable logo, attract monitor, join box, blas
 404.html        "Bad command or file name", for addresses that miss (root-absolute paths, so serve the site from the domain root)
 play.html       the game page
 styles.css      game page: menu bar, monitor bezel, pixel scaling, 2026 section at the end
-js/net.js       online transport (PeerJS loader, invite codes, peer links)
+js/net.js       online transport (PeerJS loader, invite codes, peer links, the public room list)
+llms.txt        a plain-text summary of the game for AI assistants and crawlers
 js/view3d.js    the 3D view: a small WebGL2 renderer that draws the same field as a diorama
 js/game.js      the whole game (palette, terrain, weapons, shop, AI, audio, HUD, online protocol)
 favicon.svg     pixel tank icon (favicon.ico and img/icon-*.png are the same tank as PNGs)

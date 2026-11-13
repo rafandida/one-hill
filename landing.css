@@ -1040,6 +1040,71 @@ code {
   font-size: 19px;
 }
 
+/* Public rooms: the live list */
+.rooms {
+  margin: 22px 0;
+  padding: 14px 16px 12px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.rooms-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 20px;
+  margin: 0 0 8px !important;
+}
+
+.rooms-state {
+  font-size: 19px;
+  color: var(--lcyan);
+}
+
+.rooms-state.bad {
+  color: var(--lred);
+}
+
+.rooms-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rooms-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  padding: 8px 0;
+  border-top: 2px solid rgba(255, 255, 255, 0.18);
+}
+
+.win .rooms-code {
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  color: var(--yellow);
+}
+
+.rooms-who {
+  flex: 1 1 12em;
+  color: var(--white);
+}
+
+.rooms-list .btn {
+  padding-block: 4px 3px;
+}
+
+.rooms-empty {
+  margin: 0 !important;
+  padding: 8px 0 2px;
+  border-top: 2px solid rgba(255, 255, 255, 0.18);
+}
+
+.rooms-steps {
+  margin-top: 26px;
+}
+
 /* 3D section: two screenshots side by side */
 .shots {
   display: grid;
@@ -2455,4 +2520,38 @@ kbd.down {
   [data-era="2026"] .menubar-snd::before {
     display: none;
   }
+}
+
+/* Public rooms */
+
+[data-era="2026"] .rooms {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+}
+
+[data-era="2026"] .rooms-state {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+[data-era="2026"] .rooms-state.bad {
+  color: #b8260f;
+}
+
+[data-era="2026"] .rooms-list li,
+[data-era="2026"] .rooms-empty {
+  border-top: 1px solid var(--rule);
+}
+
+[data-era="2026"] .rooms-code {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+[data-era="2026"] .rooms-who {
+  color: inherit;
 }

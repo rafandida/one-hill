@@ -16,17 +16,19 @@
     <title>One Hill: Free Online Tank Artillery Game | Tank Wars Tribute</title>
     <meta
       name="description"
-      content="Free tank artillery game in your browser, a tribute to the 1990 DOS classic Tank Wars. Play the CPU, hotseat or online, plus a new Daily Hill every day."
+      content="Free browser tank artillery game, a tribute to 1990's Tank Wars. Play the CPU, hotseat, or online in public rooms, in 2D or 3D, plus a new Daily Hill."
     />
     <link rel="canonical" href="https://onehill.app/" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="author" content="culi.app" />
+    <meta name="keywords" content="tank artillery game, Tank Wars, Scorched Earth style game, free browser game, online multiplayer tank game, public game rooms, 3D artillery game, turn-based strategy, hotseat game, Daily Hill" />
+    <link rel="alternate" type="text/plain" href="https://onehill.app/llms.txt" title="One Hill, a plain-text summary for AI assistants" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="One Hill" />
     <meta property="og:url" content="https://onehill.app/" />
     <meta property="og:title" content="One Hill: a Tank Wars tribute" />
-    <meta property="og:description" content="Up to four tanks. One hill. The wind changes every turn. Free in your browser." />
+    <meta property="og:description" content="Up to four tanks. One hill. The wind changes every turn. Play the CPU, friends, or a public room, in 2D or 3D. Free in your browser." />
     <meta property="og:image" content="https://onehill.app/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -34,7 +36,7 @@
     <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="One Hill: a Tank Wars tribute" />
-    <meta name="twitter:description" content="Up to four tanks. One hill. The wind changes every turn. Free in your browser." />
+    <meta name="twitter:description" content="Up to four tanks. One hill. The wind changes every turn. Play the CPU, friends, or a public room, in 2D or 3D. Free in your browser." />
     <meta name="twitter:image" content="https://onehill.app/og-image.png" />
     <meta name="twitter:image:alt" content="The ONE HILL logo over a night sky, with two tanks on a hill. A Tank Wars tribute." />
 
@@ -63,9 +65,29 @@
             "name": "One Hill",
             "alternateName": "One Hill: a Tank Wars tribute",
             "url": "https://onehill.app/play.html",
-            "description": "Free turn-based tank artillery in the browser. Set the angle and power, read the wind, and fire. 1 to 4 players: against the CPU, hotseat on one keyboard, or online with a five-letter invite code.",
+            "description": "Free turn-based tank artillery in the browser. Set the angle and power, read the wind, and fire. 1 to 4 players: against the CPU, hotseat on one keyboard, or online, either with a five-letter invite code or in a public room anyone can join. Playable in 2D or as a 3D diorama, in a 1990 VGA look or a 2026 look.",
             "image": "https://onehill.app/og-image.png",
-            "screenshot": "https://onehill.app/img/demo.png",
+            "screenshot": [
+              "https://onehill.app/img/demo.png",
+              "https://onehill.app/img/3d-1990.png",
+              "https://onehill.app/img/3d-2026.png",
+              "https://onehill.app/img/great-shot-1990.png"
+            ],
+            "featureList": [
+              "Turn-based tank artillery with wind that changes every turn",
+              "Destructible terrain: canyon, mesa and water gap maps",
+              "Single player against 1 to 3 CPU tanks on easy, normal or hard",
+              "Hotseat multiplayer for 2 to 4 players on one keyboard",
+              "Online multiplayer for 2 to 4 players with a five-letter invite code",
+              "Public room list: host a public room or join one, no account needed",
+              "2D view and 3D diorama view with a camera that follows the shot",
+              "Daily Hill: one seeded hill a day, the same for everyone",
+              "Weapon shop between hills: HE bombs, MIRVs, diggers, dirt bombs, shields, nukes",
+              "Great-shot callouts such as LONG SHOT, FROM ORBIT and DOUBLE KILL",
+              "1990 VGA look or 2026 look, switchable at any time",
+              "Works on phones and tablets with touch aiming"
+            ],
+            "keywords": "tank artillery, Tank Wars, Scorched Earth, browser game, online multiplayer, public rooms, 3D, hotseat, turn-based",
             "genre": ["Artillery", "Turn-based strategy"],
             "gamePlatform": "Web browser",
             "applicationCategory": "GameApplication",
@@ -104,6 +126,16 @@
               },
               {
                 "@type": "Question",
+                "name": "Can I play online with people I don't know?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. When you host an online room you can set it to PUBLIC, and it appears in the public room list on the front page and on the game's join screen. Anyone can pick it from the list and join, up to four players, with no code to pass around. Rooms are PRIVATE unless the host chooses otherwise." }
+              },
+              {
+                "@type": "Question",
+                "name": "Does One Hill have a 3D mode?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. The 2D / 3D switch, or the V key in the game, redraws the same battlefield as a 3D diorama with a camera that follows the action. The rules, the wind and online play are identical in both views, and it works in the 1990 and 2026 looks. It needs a browser with WebGL2." }
+              },
+              {
+                "@type": "Question",
                 "name": "Can I play on a phone or tablet?",
                 "acceptedAnswer": { "@type": "Answer", "text": "Yes. One Hill works on touch screens: drag around your tank to aim, drag up or down for power, and tap to fire. On a computer you can use the keyboard or the mouse." }
               },
@@ -128,8 +160,8 @@
       }
     </script>
     <link rel="preload" href="fonts/VT323-Regular.woff2" as="font" type="font/woff2" crossorigin />
-    <script src="js/era.js?v=20261113"></script>
-    <link rel="stylesheet" href="landing.css?v=20261113" />
+    <script src="js/era.js?v=20261113b"></script>
+    <link rel="stylesheet" href="landing.css?v=20261113b" />
     <script>
       // Invite links that land on the front page go straight to the game.
       if (/[?&]room=/.test(location.search)) location.replace("play.html" + location.search);
@@ -193,6 +225,7 @@
           <div class="cta">
             <a class="btn btn-go" href="play.html">PLAY NOW</a>
             <a class="btn btn-alt" href="play.html?host">HOST ONLINE GAME</a>
+            <a class="btn btn-alt" href="#rooms">FIND A PUBLIC ROOM</a>
           </div>
           <p class="fine">
             Free · plays in the browser · nothing to install · <a href="#online">got an invite code?</a>
@@ -415,6 +448,44 @@
               the browsers connect to each other directly.
             </p>
             <p><a class="btn btn-alt" href="play.html?host">HOST A ROOM</a></p>
+            <p>Nobody to send a code to? <a href="#rooms">Join a public room</a> instead.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="layer layer-4 layer-rooms" id="rooms" aria-labelledby="rooms-title">
+        <div class="wrap">
+          <div class="win win-wide">
+            <p class="win-title">PUBLIC ROOMS</p>
+            <h2 id="rooms-title">Nobody to play with? Walk into a room.</h2>
+            <p>
+              You don't need a friend with a code. Any host can set their room to <b>PUBLIC</b>, and it shows up
+              here, and on the game's join screen, for anyone to walk into. Up to four players a room, each on their
+              own screen, and no account for anybody.
+            </p>
+            <div class="rooms" data-rooms>
+              <p class="rooms-head">
+                <b>OPEN ROOMS</b>
+                <span class="rooms-state" data-rooms-state role="status">Scroll here and the list goes looking.</span>
+              </p>
+              <ul class="rooms-list" data-rooms-list aria-label="Public rooms you can join"></ul>
+              <p class="rooms-empty" data-rooms-empty>
+                No public rooms are open right now. Host one, and the next visitor finds you here.
+              </p>
+            </div>
+            <p class="shots-go">
+              <a class="btn btn-go" href="play.html?host&amp;public">HOST A PUBLIC ROOM</a>
+              <a class="btn btn-alt" href="play.html?mode=online">BROWSE IN THE GAME</a>
+            </p>
+            <ol class="steps rooms-steps">
+              <li><b>HOST.</b> Open a room and switch <b>ROOM LIST</b> to PUBLIC. It starts PRIVATE, so games with friends stay unlisted.</li>
+              <li><b>WAIT.</b> Your room is listed while it has a free seat and hasn't started. Fill the gaps with CPU tanks if you like.</li>
+              <li><b>START.</b> Press START when you're happy with the crowd. The room leaves the list and the hill is yours to fight over.</li>
+            </ol>
+            <p class="shots-note">
+              There is no game server. The list is passed between the browsers that have it open, so it can go blank
+              for a few seconds when one of them leaves.
+            </p>
           </div>
         </div>
       </section>
@@ -487,6 +558,14 @@
               <details>
                 <summary><h3>How do I play with friends online?</h3></summary>
                 <p>Pick ONLINE, then HOST, and you get a five-letter invite code. Send friends the code or the invite link, and up to four players share one hill, each on their own screen. Empty seats can be filled with CPU tanks, and nobody has to sign up.</p>
+              </details>
+              <details>
+                <summary><h3>Can I play online with people I don&#39;t know?</h3></summary>
+                <p>Yes. When you host an online room you can set it to PUBLIC, and it appears in the public room list on the front page and on the game's join screen. Anyone can pick it from the list and join, up to four players, with no code to pass around. Rooms are PRIVATE unless the host chooses otherwise.</p>
+              </details>
+              <details>
+                <summary><h3>Does One Hill have a 3D mode?</h3></summary>
+                <p>Yes. The 2D / 3D switch, or the V key in the game, redraws the same battlefield as a 3D diorama with a camera that follows the action. The rules, the wind and online play are identical in both views, and it works in the 1990 and 2026 looks. It needs a browser with WebGL2.</p>
               </details>
               <details>
                 <summary><h3>Can I play on a phone or tablet?</h3></summary>
@@ -576,6 +655,7 @@ Send a friend an invite code instead.</pre>
       </div>
     </footer>
 
-    <script src="js/landing.js?v=20261113"></script>
+    <script src="js/net.js?v=20261113b"></script>
+    <script src="js/landing.js?v=20261113b"></script>
   </body>
 </html>
