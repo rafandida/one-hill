@@ -69,6 +69,30 @@ All graphics and sounds are original. Nothing was copied from the DOS binaries.
     <td align="center"><sub>2026 mode. Same water gap, rebuilt as hardware.</sub></td>
     <td align="center"><sub>The 2026 front page. The logo is a dot-matrix display now, and you can still shoot it.</sub></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="img/3d-1990.png" alt="3D view in 1990 mode: a green-topped brown slab of hills under a night sky, four small blocky tanks on it, and a dotted arc leaving the cyan tank's barrel" /></td>
+    <td width="50%"><img src="img/3d-2026.png" alt="3D view in 2026 mode: a charcoal slab of hills on dot-grid paper, four small colored tanks on it, and a dotted arc leaving the orange tank's barrel" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>3D in 1990. Press V and the flat hill tips back into a diorama.</sub></td>
+    <td align="center"><sub>3D in 2026. Same slab, same four tanks, in charcoal on paper.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="img/great-shot-1990.png" alt="A shell lands on a far tank in 3D and LONG SHOT! slams across the sky over a fan of rays" /></td>
+    <td width="50%"><img src="img/great-shot-2026.png" alt="A shell lands on a far tank in 3D and a black LONG SHOT! plate drops in over a fan of orange rays" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A great shot gets a headline, sparks and a fanfare.</sub></td>
+    <td align="center"><sub>The same LONG SHOT in 2026.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="img/readme/room-public.png" alt="The online room screen: invite code, three players seated, and ROOM LIST set to PUBLIC and marked listed" /></td>
+    <td width="50%"><img src="img/readme/rooms.png" alt="The front page's PUBLIC ROOMS section: one open room with its code, player count and a JOIN button" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Hosting a public room. ROOM LIST is the setting that lists it.</sub></td>
+    <td align="center"><sub>The front page lists open rooms. One click to join.</sub></td>
+  </tr>
 </table>
 
 ## Run it
@@ -98,6 +122,17 @@ The choice is remembered, other open tabs follow along, and a link with `?era=20
 <p align="center">
   <img src="img/readme/game-3d.png" alt="3D view in 1990 mode: the hill as a slab of green-topped brown ground under a night sky, with small blocky tanks on it and the camera turned to one side" width="640" />
 </p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="img/3d-1990.png" alt="3D view in 1990 mode with four tanks and an aiming arc" /></td>
+    <td width="50%"><img src="img/3d-2026.png" alt="3D view in 2026 mode with four tanks and an aiming arc" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>1990: hard-edged, banded, low-resolution polygons.</sub></td>
+    <td align="center"><sub>2026: smooth charcoal on dot-grid paper.</sub></td>
+  </tr>
+</table>
 
 The **2D · 3D** keys next to the era switch, on the front page and above the game (or **V** in the game), change how the battlefield is drawn. In 3D the hill is a slab of ground seen from a camera that leans toward whoever is aiming and follows the shell. **Q** and **E** turn the camera yourself.
 
