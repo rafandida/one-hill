@@ -128,8 +128,8 @@
       }
     </script>
     <link rel="preload" href="fonts/VT323-Regular.woff2" as="font" type="font/woff2" crossorigin />
-    <script src="js/era.js"></script>
-    <link rel="stylesheet" href="landing.css" />
+    <script src="js/era.js?v=20261113"></script>
+    <link rel="stylesheet" href="landing.css?v=20261113" />
     <script>
       // Invite links that land on the front page go straight to the game.
       if (/[?&]room=/.test(location.search)) location.replace("play.html" + location.search);
@@ -145,6 +145,7 @@
           <li><a href="play.html"><span class="hot">P</span>lay</a></li>
           <li class="menubar-mid"><a href="#modes"><span class="hot">M</span>odes</a></li>
           <li class="menubar-mid"><a href="#online"><span class="hot">O</span>nline</a></li>
+          <li class="menubar-wide"><a href="#view"><span class="hot">3</span>D</a></li>
           <li class="menubar-wide"><a href="#arsenal"><span class="hot">A</span>rsenal</a></li>
           <li class="menubar-wide"><a href="#keys"><span class="hot">K</span>eys</a></li>
           <li class="menubar-wide menubar-help"><a href="#faq"><span class="hot">H</span>elp</a></li>
@@ -153,6 +154,10 @@
       <div class="era-switch" role="group" aria-label="Era">
         <button type="button" data-era-pick="1990" aria-pressed="true">1990</button>
         <button type="button" data-era-pick="2026" aria-pressed="false">2026</button>
+      </div>
+      <div class="era-switch view-switch" role="group" aria-label="Game view" hidden>
+        <button type="button" data-view-pick="2d" aria-pressed="true">2D</button>
+        <button type="button" data-view-pick="3d" aria-pressed="false">3D</button>
       </div>
       <button class="menubar-snd" type="button" aria-pressed="false">SND OFF</button>
     </header>
@@ -241,6 +246,47 @@
               stay. Dig out the ground under a tank and down it goes.
             </p>
             <p><a href="play.html">Click the screen</a> to take a turn yourself.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="layer layer-2 layer-view" id="view" aria-labelledby="view-title">
+        <div class="wrap">
+          <div class="win win-wide">
+            <p class="win-title">VIEW</p>
+            <h2 id="view-title">Tip the hill back. Now it's 3D.</h2>
+            <p>
+              Flip <b>2D · 3D</b> in the menu bar, or press <kbd>V</kbd> in the game, and the flat hill tips back into
+              a diorama: a slab of ground with a cut face, blocky tanks, and a camera that leans toward whoever is
+              aiming and follows the shell. <kbd>Q</kbd> and <kbd>E</kbd> turn the camera yourself.
+            </p>
+            <p>
+              It's the same game underneath. Shells still fly straight down the middle of the slab, so the wind, the
+              craters, the CPU and online rooms all work exactly as before, and everyone in a room picks their own
+              view. It works in <b>1990</b> and in <b>2026</b>.
+            </p>
+            <div class="shots">
+              <figure>
+                <img class="e90" src="img/3d-1990.png" alt="One Hill in 3D, 1990 mode: a green-topped brown slab of hills under a night sky, four small blocky tanks on it, and a dotted arc leaving the cyan tank's barrel" width="976" height="610" loading="lazy" />
+                <img class="e26" src="img/3d-2026.png" alt="One Hill in 3D, 2026 mode: a charcoal slab of hills on dot-grid paper, four small colored tanks on it, and a dotted arc leaving the orange tank's barrel" width="976" height="610" loading="lazy" />
+                <figcaption>The 3D view. Same hill, same four tanks, seen from the side.</figcaption>
+              </figure>
+              <figure>
+                <img class="e90" src="img/great-shot-1990.png" alt="A shell lands on a far tank in 3D and LONG SHOT! slams across the sky over a fan of rays" width="976" height="610" loading="lazy" />
+                <img class="e26" src="img/great-shot-2026.png" alt="A shell lands on a far tank in 3D and a black LONG SHOT! plate drops in over a fan of orange rays" width="976" height="610" loading="lazy" />
+                <figcaption>Great shots get a headline, sparks, and a fanfare.</figcaption>
+              </figure>
+            </div>
+            <p>
+              Land one worth bragging about and the game stops to say so: <b>LONG SHOT</b> from across the map,
+              <b>FROM ORBIT</b> off the top of the screen, <b>WIND RIDER</b> through a gale, <b>DEAD CENTER</b>,
+              <b>LUCKY HIT</b>, a <b>DOUBLE KILL</b>. Take yourself out and you get <b>OWN GOAL</b> instead.
+            </p>
+            <p class="shots-go">
+              <a class="btn btn-go" href="play.html?view=3d">PLAY IN 3D</a>
+              <a class="btn btn-alt" href="play.html?view=2d">KEEP IT FLAT</a>
+            </p>
+            <p class="shots-note">3D needs a browser with WebGL2. Without it the switch is hidden and the game stays flat.</p>
           </div>
         </div>
       </section>
@@ -530,6 +576,6 @@ Send a friend an invite code instead.</pre>
       </div>
     </footer>
 
-    <script src="js/landing.js"></script>
+    <script src="js/landing.js?v=20261113"></script>
   </body>
 </html>

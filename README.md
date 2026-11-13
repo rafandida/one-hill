@@ -98,13 +98,13 @@ The choice is remembered, other open tabs follow along, and a link with `?era=20
   <img src="img/readme/game-3d.png" alt="3D view in 1990 mode: the hill as a slab of green-topped brown ground under a night sky, with small blocky tanks on it and the camera turned to one side" width="640" />
 </p>
 
-The **2D · 3D** keys next to the era switch (or **V** in the game) change how the battlefield is drawn. In 3D the hill is a slab of ground seen from a camera that leans toward whoever is aiming and follows the shell. **Q** and **E** turn the camera yourself.
+The **2D · 3D** keys next to the era switch, on the front page and above the game (or **V** in the game), change how the battlefield is drawn. In 3D the hill is a slab of ground seen from a camera that leans toward whoever is aiming and follows the shell. **Q** and **E** turn the camera yourself.
 
 - Only the drawing changes. Shells still fly in the flat plane down the middle of the slab, so the rules, the AI and online play are identical, and players in one room can each pick their own view.
 - Aiming with the mouse works the same: the pointer is traced back onto the battlefield through the camera.
 - It works in both eras. 1990 gets hard-edged, banded, low-resolution polygons; 2026 gets smooth charcoal.
 - It needs WebGL2. Where that is missing the switch is hidden and the game stays flat.
-- The choice is remembered, and `?view=3d` (or `?view=2d`) picks it from a link. The attract-mode monitor on the front page stays flat.
+- The choice is remembered, and `?view=3d` (or `?view=2d`) picks it from a link. The front page itself stays flat, but its switch sets the view the game opens in, and the attract-mode monitor follows it live.
 
 ## Front page
 

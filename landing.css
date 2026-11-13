@@ -219,6 +219,15 @@ a:hover {
   background: var(--blue);
 }
 
+.era-switch[hidden] {
+  display: none;
+}
+
+/* 2D / 3D for the game, next to the era keys */
+.view-switch {
+  margin-left: 10px;
+}
+
 .menubar-snd {
   margin-left: 10px;
   padding: 3px 10px 2px;
@@ -260,6 +269,15 @@ a:hover {
 
   .menubar-snd {
     white-space: nowrap;
+  }
+
+  .view-switch,
+  .menubar-snd {
+    margin-left: 6px;
+  }
+
+  .era-switch button {
+    padding-inline: 5px;
   }
 }
 
@@ -1020,6 +1038,49 @@ code {
 .blast figcaption {
   margin-top: 6px;
   font-size: 19px;
+}
+
+/* 3D section: two screenshots side by side */
+.shots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  margin: 22px 0;
+}
+
+.shots figure {
+  margin: 0;
+}
+
+.shots img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 2px solid var(--black);
+  image-rendering: pixelated;
+}
+
+.shots figcaption {
+  margin-top: 6px;
+  font-size: 19px;
+}
+
+.shots-go {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 22px;
+  margin-top: 22px;
+}
+
+.shots-note {
+  font-size: 19px;
+  color: var(--lcyan);
+}
+
+@media (max-width: 700px) {
+  .shots {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .price {
@@ -2363,5 +2424,35 @@ kbd.down {
 @media (prefers-reduced-motion: reduce) {
   [data-era="2026"] .btn {
     transition: none;
+  }
+}
+
+/* 3D section */
+
+[data-era="2026"] .shots img {
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  image-rendering: auto;
+}
+
+[data-era="2026"] .shots figcaption,
+[data-era="2026"] .shots-note {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Phones: the keys lose their LEDs so both switches fit beside the menu. */
+@media (max-width: 560px) {
+  [data-era="2026"] .era-switch button,
+  [data-era="2026"] .menubar-snd {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+
+  [data-era="2026"] .era-switch button::before,
+  [data-era="2026"] .menubar-snd::before {
+    display: none;
   }
 }

@@ -5688,8 +5688,8 @@
   }
 
   // 2D / 3D (js/view3d.js). The switch only shows where WebGL2 is available.
-  // The choice is remembered and ?view=3d picks it; attract mode on the front
-  // page stays flat unless its link says otherwise.
+  // The choice is remembered and ?view=3d picks it. Attract mode on the front
+  // page follows the choice (the front page has the same switch) but never sets it.
   const viewSwitch = document.querySelector(".view-switch");
   const viewPicks = document.querySelectorAll("[data-view-pick]");
   if (window.TankView3D && window.TankView3D.supported) {
@@ -5711,7 +5711,8 @@
       });
     }
     let view = params.get("view");
-    if (view !== "2d" && view !== "3d" && !game.demo) {
+    const pinned = view === "2d" || view === "3d";
+    if (!pinned) {
       try {
         view = localStorage.getItem(VIEW_KEY);
       } catch (e) {
@@ -5720,6 +5721,10 @@
     }
     game.setView(view === "3d");
     if (game.v3) game.v3.enter(false);
+    // Another tab, or the front page around the attract-mode monitor, flipped the switch.
+    window.addEventListener("storage", function (e) {
+      if (e.key === VIEW_KEY && e.newValue && !pinned) game.setView(e.newValue === "3d");
+    });
   }
 
   let resizing = 0;

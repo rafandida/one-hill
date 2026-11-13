@@ -1763,7 +1763,60 @@
     });
   }
 
+  // 2D / 3D for the game. The front page itself stays flat: the switch sets the
+  // view the game opens in, and the attract-mode monitor follows it live (the
+  // game listens for the stored choice changing). Hidden without WebGL2, like
+  // the game's own switch.
+  function setupView() {
+    const KEY = "tankwars-view";
+    const box = document.querySelector(".view-switch");
+    const picks = document.querySelectorAll("[data-view-pick]");
+    if (!box || !picks.length) return;
+    let webgl = false;
+    try {
+      webgl = !!document.createElement("canvas").getContext("webgl2");
+    } catch (e) {
+      webgl = false;
+    }
+    if (!webgl) return;
+    box.hidden = false;
+    function stored() {
+      try {
+        return localStorage.getItem(KEY) === "3d" ? "3d" : "2d";
+      } catch (e) {
+        return "2d";
+      }
+    }
+    function paint(view) {
+      for (let i = 0; i < picks.length; i++) {
+        picks[i].setAttribute("aria-pressed", picks[i].dataset.viewPick === view ? "true" : "false");
+      }
+    }
+    paint(stored());
+    for (let i = 0; i < picks.length; i++) {
+      picks[i].addEventListener("click", function () {
+        const view = picks[i].dataset.viewPick;
+        const changed = view !== stored();
+        try {
+          localStorage.setItem(KEY, view);
+        } catch (e) {
+          /* the monitor and the game just stay as they were */
+        }
+        paint(stored());
+        Snd.blip();
+        // Show what the switch did: bring the live monitor into view.
+        const crt = document.querySelector(".crt");
+        if (changed && crt && !reduceMotion) crt.scrollIntoView({ behavior: "smooth", block: "center" });
+        else if (changed && view === "3d" && document.getElementById("view")) document.getElementById("view").scrollIntoView();
+      });
+    }
+    window.addEventListener("storage", function (e) {
+      if (e.key === KEY) paint(stored());
+    });
+  }
+
   setupSound();
+  setupView();
   setupHero();
   setupMonitor();
   setupDialog();
