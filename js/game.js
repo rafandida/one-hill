@@ -208,6 +208,7 @@
   const SHOT_CLOCK = 45;
   const CLOCK_GRACE = 12;
   const SYNC_PATIENCE = 4;
+  const JOIN_ROWS = 4; // public rooms shown on the join screen
   const MENU_MODES = { title: true, lobby: true, join: true, netdown: true };
 
   // ---------------------------------------------------------------------------
@@ -1565,6 +1566,14 @@
     this.dailyShot = null;
     this.dailyInfo = null;
     this.savedDifficulty = 1;
+    // Public rooms (js/net.js lobby): whether a hosted room is listed, and the
+    // list the join screen is browsing.
+    this.netPublic = false;
+    this.browse = null;
+    this.browseState = "";
+    this.publicRooms = [];
+    this.joinPick = -1;
+    this.joinBoxes = [];
     // 3D view (js/view3d.js): wanted, the renderer, and whether this frame used it.
     this.view3d = false;
     this.v3 = null;
@@ -2400,6 +2409,12 @@
       if (this.cheer.t >= this.cheer.life) this.cheer = null;
     }
     if (this.punch > 0) this.punch = Math.max(0, this.punch - dt * 2.2);
+    if (this.browse && this.mode !== "join") {
+      this.browse.close();
+      this.browse = null;
+      this.publicRooms = [];
+      this.joinPick = -1;
+    }
     if (this.slowmo > 0) {
       this.slowmo -= dt;
       dt *= 0.28;
@@ -2717,6 +2732,8 @@
       aimKey: "",
       aimAt: 0,
       playing: false,
+      lobby: null,
+      listState: "",
     };
     this.net = net;
     this.mode = "lobby";
@@ -2739,6 +2756,7 @@
         net.room = room;
         net.code = room.code;
         Sfx.pickup();
+        self.syncListing();
       },
       function (err) {
         if (self.net === net) net.error = err.message;
@@ -2801,8 +2819,31 @@
       history.replaceState(null, "", location.pathname + (rest ? "?" + rest : ""));
     }
     if (!net) return;
+    if (net.lobby) net.lobby.close();
     if (net.room) net.room.close();
     if (net.link) net.link.close();
+  };
+
+  /**
+   * Host: keep the public room list in step with this room. It is listed only
+   * while the host has it set to PUBLIC, the game has not started, and a human
+   * seat is still free. Once the host has gone to the list it stays connected
+   * until the room closes: this browser may be the one holding the list for
+   * everybody, and dropping off just to unlist would blank it for them.
+   */
+  Game.prototype.syncListing = function () {
+    const net = this.net;
+    if (!net || !net.host || !net.room) return;
+    const listed = this.netPublic && !net.playing && net.seats.length < MAX_TANKS;
+    if (!net.lobby) {
+      if (!listed) return;
+      net.lobby = TankNet.lobby({
+        state: function (s) {
+          net.listState = s;
+        },
+      });
+    }
+    net.lobby.publish(listed ? { code: net.code, humans: net.seats.length, cpu: this.netCpu, diff: this.difficulty } : null);
   };
 
   Game.prototype.netDown = function (why) {
@@ -2908,6 +2949,7 @@
         code: net.code,
       });
     }
+    this.syncListing();
   };
 
   /** Seat whoever is still here; seat index doubles as roster id. */
@@ -3250,8 +3292,12 @@
       return;
     }
     if (consume("c") || consume("C")) this.shareInvite();
-    if (consume("ArrowUp") || consume("w") || consume("W") || consume("ArrowDown") || consume("s") || consume("S")) {
-      this.lobbyRow = 1 - this.lobbyRow;
+    if (consume("ArrowUp") || consume("w") || consume("W")) {
+      this.lobbyRow = (this.lobbyRow + 2) % 3;
+      Sfx.ui();
+    }
+    if (consume("ArrowDown") || consume("s") || consume("S")) {
+      this.lobbyRow = (this.lobbyRow + 1) % 3;
       Sfx.ui();
     }
     if (consume("ArrowLeft") || consume("a") || consume("A")) this.nudgeLobby(-1);
@@ -3263,8 +3309,11 @@
     if (this.lobbyRow === 0) {
       const open = MAX_TANKS - this.net.seats.length;
       this.netCpu = (this.netCpu + dir + open + 1) % (open + 1);
-    } else {
+    } else if (this.lobbyRow === 1) {
       this.difficulty = (this.difficulty + dir + 3) % 3;
+    } else {
+      this.netPublic = !this.netPublic;
+      this.lobbyNote(this.netPublic ? "LISTED: ANYONE CAN JOIN" : "UNLISTED: INVITE ONLY");
     }
     Sfx.ui();
     this.sendLobby();
@@ -3318,7 +3367,7 @@
       else if (b.id === "start") this.hostStart();
       else if (b.id === "leave") this.toTitle();
       else {
-        this.lobbyRow = b.id === "cpu" ? 0 : 1;
+        this.lobbyRow = b.id === "cpu" ? 0 : b.id === "diff" ? 1 : 2;
         this.nudgeLobby(1);
       }
       return;
@@ -3330,24 +3379,70 @@
       this.toTitle();
       return;
     }
+    this.browseRooms();
     if (this.net) {
       flushTaps();
       return;
     }
+    const shown = Math.min(this.publicRooms.length, JOIN_ROWS);
     while (taps.length) {
       const k = taps.shift();
       if (k === "Backspace" || k === "Delete") {
         this.joinCode = this.joinCode.slice(0, -1);
+        this.joinPick = -1;
+      } else if (k === "ArrowDown" || k === "ArrowUp") {
+        // -1 is the code boxes; 0 and up are rows of the public list.
+        const n = shown + 1;
+        this.joinPick = ((this.joinPick + 1 + (k === "ArrowDown" ? 1 : n - 1)) % n) - 1;
+        if (shown) Sfx.ui();
       } else if (k === "Enter") {
-        this.tryJoin();
+        if (this.joinPick >= 0 && this.joinPick < shown) this.joinPublic(this.publicRooms[this.joinPick]);
+        else this.tryJoin();
         break;
       } else if (k.length === 1) {
         const c = TankNet.cleanCode(k);
         if (c && this.joinCode.length < TankNet.CODE_LEN) {
           this.joinCode += c;
           this.joinError = "";
+          this.joinPick = -1;
           Sfx.tick();
         }
+      }
+    }
+  };
+
+  /** Watch the public room list while the join screen is up (the game loop stops it afterwards). */
+  Game.prototype.browseRooms = function () {
+    if (this.browse || !window.TankNet) return;
+    const self = this;
+    this.browseState = "connecting";
+    this.browse = TankNet.lobby({
+      rooms: function (list) {
+        self.publicRooms = list.filter(function (r) {
+          return r.humans < MAX_TANKS;
+        });
+        if (self.joinPick >= Math.min(self.publicRooms.length, JOIN_ROWS)) self.joinPick = -1;
+      },
+      state: function (s) {
+        self.browseState = s;
+      },
+    });
+  };
+
+  Game.prototype.joinPublic = function (room) {
+    if (!room || this.net) return;
+    Sfx.ui();
+    this.joinCode = room.code;
+    this.joinOnline(room.code);
+  };
+
+  Game.prototype.joinClick = function (p) {
+    if (this.net) return;
+    for (let i = 0; i < this.joinBoxes.length; i++) {
+      const b = this.joinBoxes[i];
+      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
+        this.joinPublic(this.publicRooms[b.i]);
+        return;
       }
     }
   };
@@ -4148,7 +4243,7 @@
       row1 = { label: "DIFFICULTY", value: DIFF_LABELS[this.difficulty], hint: DIFF_NAMES[this.difficulty] };
     } else if (this.playMode === "online") {
       const hosting = this.onlineRole === "host";
-      row1 = { label: "ROOM", value: hosting ? "HOST" : "JOIN", hint: hosting ? "get a code" : "use their code" };
+      row1 = { label: "ROOM", value: hosting ? "HOST" : "JOIN", hint: hosting ? "get a code" : "code or public room" };
     } else {
       row1 = { label: "PLAYERS", value: String(this.hotseatPlayers), hint: "same keyboard" };
     }
@@ -4529,7 +4624,7 @@
     ctx.textAlign = "left";
     ctx.font = font(13);
     for (let i = 0; i < MAX_TANKS; i++) {
-      const y = 170 + i * 17;
+      const y = 166 + i * 16;
       const filled = i < humans + cpu;
       ctx.fillStyle = filled ? PLAYER_COLORS[i] : C.dgray;
       ctx.fillText(filled ? seatName(i, humans, cpu, this.difficulty) : "--", 170, y);
@@ -4546,16 +4641,26 @@
       const rows = [
         { id: "cpu", label: "CPU TANKS", value: String(this.netCpu) },
         { id: "diff", label: "DIFFICULTY", value: DIFF_LABELS[this.difficulty] },
+        { id: "list", label: "ROOM LIST", value: this.netPublic ? "PUBLIC" : "PRIVATE" },
       ];
       ctx.font = font(13);
       for (let i = 0; i < rows.length; i++) {
-        const y = 246 + i * 18;
+        const y = 236 + i * 16;
         const sel = this.lobbyRow === i;
         ctx.fillStyle = sel ? C.yellow : C.gray;
         ctx.fillText((sel ? "> " : "  ") + rows[i].label, 170, y);
         ctx.fillStyle = sel ? C.white : C.lcyan;
         ctx.fillText("< " + rows[i].value + " >", 330, y);
-        this.lobbyBoxes.push({ id: rows[i].id, x: 160, y: y - 2, w: 320, h: 17 });
+        this.lobbyBoxes.push({ id: rows[i].id, x: 160, y: y - 2, w: 320, h: 15 });
+      }
+      // Whether the room has actually reached the public list.
+      if (this.netPublic) {
+        const full = humans >= MAX_TANKS;
+        const how = full ? "full" : net.listState === "live" ? "listed" : net.listState === "down" ? "list unreachable" : "listing…";
+        ctx.fillStyle = how === "listed" ? C.lgreen : how === "list unreachable" ? C.lred : C.dgray;
+        ctx.font = font(11);
+        ctx.fillText(how, 440, 236 + 2 * 16 + 1);
+        ctx.font = font(13);
       }
       this.drawLobbyButton(ctx, "share", url ? "COPY LINK" : "COPY CODE", 196, C.lcyan);
       const canStart = humans + cpu >= 2;
@@ -4563,7 +4668,7 @@
       ctx.textAlign = "center";
       ctx.fillStyle = C.gray;
       ctx.font = font(11);
-      ctx.fillText("↑ ↓ ← → set CPU    C copy link    ENTER start    ESC close", W / 2, 330);
+      ctx.fillText("↑ ↓ ← → settings    C copy link    ENTER start    ESC close", W / 2, 330);
     } else {
       ctx.textAlign = "center";
       ctx.fillStyle = Math.floor(this.time * 2) % 2 ? C.yellow : C.white;
@@ -4646,11 +4751,55 @@
     }
     ctx.fillStyle = C.gray;
     ctx.font = font(11);
-    ctx.fillText("Paste works too, code or whole invite link.", W / 2, 226);
-    ctx.fillText("A friend's link drops you straight in.", W / 2, 242);
+    ctx.fillText("Paste works too: the code or a whole invite link.", W / 2, 211);
+
+    // Public rooms: anyone's listed room, one click or ↓ and Enter away.
+    this.joinBoxes = [];
+    ctx.fillStyle = C.yellow;
+    ctx.font = font(11, true);
+    ctx.fillText("— OR PICK A PUBLIC ROOM —", W / 2, 232);
+    const rooms = this.publicRooms;
+    const shown = Math.min(rooms.length, JOIN_ROWS);
+    if (!shown) {
+      let text = "No public rooms open right now. Host one and it shows up here.";
+      if (this.browseState === "connecting") text = "LOOKING FOR PUBLIC ROOMS…";
+      else if (this.browseState === "down") text = "ROOM LIST UNREACHABLE. A CODE STILL WORKS.";
+      ctx.fillStyle = this.browseState === "down" ? C.lred : C.dgray;
+      ctx.font = font(11);
+      ctx.fillText(text, W / 2, 258);
+    }
+    for (let i = 0; i < shown; i++) {
+      const r = rooms[i];
+      const y = 249 + i * 15;
+      const sel = this.joinPick === i && !this.net;
+      if (sel) {
+        ctx.fillStyle = MODERN ? "#e2dfd9" : "#1a1a1a";
+        ctx.fillRect(140, y - 2, 360, 15);
+      }
+      ctx.textAlign = "left";
+      ctx.font = font(12, true);
+      ctx.fillStyle = sel ? C.yellow : C.lcyan;
+      ctx.fillText((sel ? "> " : "  ") + r.code, 146, y);
+      ctx.font = font(11);
+      ctx.fillStyle = C.white;
+      let who = r.humans + "/" + MAX_TANKS + " players";
+      if (r.cpu) who += " · " + r.cpu + " cpu " + DIFF_LABELS[r.diff].toLowerCase();
+      ctx.fillText(who, 226, y + 1);
+      ctx.textAlign = "right";
+      ctx.font = font(11, true);
+      ctx.fillStyle = C.lgreen;
+      ctx.fillText("JOIN", 494, y + 1);
+      ctx.textAlign = "center";
+      this.joinBoxes.push({ i: i, x: 140, y: y - 2, w: 360, h: 15 });
+    }
+    if (rooms.length > shown) {
+      ctx.fillStyle = C.dgray;
+      ctx.font = font(11);
+      ctx.fillText("+" + (rooms.length - shown) + " more", 540, 249 + (shown - 1) * 15 + 1);
+    }
     ctx.fillStyle = C.white;
     ctx.font = font(12);
-    ctx.fillText("ENTER  join     BACKSPACE  fix     ESC  back", W / 2, 300);
+    ctx.fillText("ENTER  join     ↑ ↓  public rooms     ESC  back", W / 2, 318);
   };
 
   Game.prototype.drawNetDown = function (ctx) {
@@ -5573,7 +5722,10 @@
       this.toTitle();
       return;
     }
-    if (this.mode === "join") return;
+    if (this.mode === "join") {
+      this.joinClick(p);
+      return;
+    }
     if (this.mode === "handoff") {
       this.releaseHandoff();
       return;
@@ -5670,6 +5822,9 @@
       game.playMode = preset;
     }
     if (params.has("host") && window.TankNet) {
+      // ?host&public opens a room that is already on the public list.
+      if (params.has("public")) game.netPublic = true;
+      params.delete("public");
       params.delete("host");
       const rest = params.toString();
       history.replaceState(null, "", location.pathname + (rest ? "?" + rest : ""));

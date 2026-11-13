@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://onehill.app/</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
     <image:image>
@@ -14,10 +14,19 @@
     <image:image>
       <image:loc>https://onehill.app/img/demo-2026.jpg</image:loc>
     </image:image>
+    <image:image>
+      <image:loc>https://onehill.app/img/3d-1990.png</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://onehill.app/img/3d-2026.png</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://onehill.app/img/great-shot-1990.png</image:loc>
+    </image:image>
   </url>
   <url>
     <loc>https://onehill.app/play.html</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>

@@ -1815,7 +1815,90 @@
     });
   }
 
+  // Public rooms: the live list of rooms anyone can join (js/net.js). It only
+  // goes online once the section is on screen, so a visit that never scrolls
+  // this far never loads the net code.
+  function setupRooms() {
+    const box = document.querySelector("[data-rooms]");
+    if (!box || !window.TankNet || !window.TankNet.lobby) return;
+    const listEl = box.querySelector("[data-rooms-list]");
+    const emptyEl = box.querySelector("[data-rooms-empty]");
+    const stateEl = box.querySelector("[data-rooms-state]");
+    const DIFF = ["easy", "normal", "hard"];
+    let rooms = [];
+    let state = "";
+    let watch = null;
+
+    function paint() {
+      const open = rooms.filter(function (r) {
+        return r.humans < 4;
+      });
+      listEl.textContent = "";
+      for (let i = 0; i < open.length && i < 8; i++) {
+        const r = open[i];
+        const li = document.createElement("li");
+        const code = document.createElement("b");
+        code.className = "rooms-code";
+        code.textContent = r.code;
+        const who = document.createElement("span");
+        who.className = "rooms-who";
+        who.textContent =
+          r.humans + " of 4 players" + (r.cpu ? " · " + r.cpu + " CPU tank" + (r.cpu > 1 ? "s" : "") + " on " + DIFF[r.diff] : "");
+        const go = document.createElement("a");
+        go.className = "btn btn-go";
+        go.href = "play.html?room=" + encodeURIComponent(r.code);
+        go.textContent = "JOIN";
+        go.setAttribute("aria-label", "Join room " + r.code);
+        li.appendChild(code);
+        li.appendChild(who);
+        li.appendChild(go);
+        listEl.appendChild(li);
+      }
+      emptyEl.hidden = open.length > 0 || state !== "live";
+      stateEl.classList.toggle("bad", state === "down");
+      if (state === "down") stateEl.textContent = "Room list unreachable. An invite code still works.";
+      else if (state !== "live") stateEl.textContent = "Looking for rooms…";
+      else stateEl.textContent = open.length ? open.length + (open.length === 1 ? " room open" : " rooms open") : "Listening for new rooms";
+    }
+
+    function start() {
+      if (watch) return;
+      state = "connecting";
+      paint();
+      watch = window.TankNet.lobby({
+        rooms: function (list) {
+          rooms = list;
+          paint();
+        },
+        state: function (s) {
+          state = s;
+          paint();
+        },
+      });
+    }
+
+    if ("IntersectionObserver" in window) {
+      const seen = new IntersectionObserver(function (entries) {
+        if (entries[0].isIntersecting) {
+          seen.disconnect();
+          start();
+        }
+      });
+      seen.observe(box);
+    } else {
+      start();
+    }
+    // Leaving the page stops the watch; coming back from the back-forward cache restarts it.
+    window.addEventListener("pageshow", function (e) {
+      if (!e.persisted || !watch) return;
+      watch = null;
+      rooms = [];
+      start();
+    });
+  }
+
   setupSound();
+  setupRooms();
   setupView();
   setupHero();
   setupMonitor();

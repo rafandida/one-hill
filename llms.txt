@@ -1,0 +1,37 @@
+# One Hill
+
+> One Hill is a free turn-based tank artillery game that runs in a web browser. It is an independent fan tribute to Tank Wars, the 1990 MS-DOS shareware game by Kenny Morse. No account, no download, no payment.
+
+Players set a barrel angle and a shot power, allow for wind that changes every turn, and lob shells over a hill at up to three other tanks. Explosions leave craters, and a tank falls if the ground under it is blown away. A match is a best of five hills, with a weapon shop between hills.
+
+## Play
+
+- [Front page](https://onehill.app/): what the game is, a live demo, the public room list, controls and FAQ
+- [The game](https://onehill.app/play.html): opens on the title screen
+- [Daily Hill](https://onehill.app/play.html?mode=daily): one hill a day, the same map and wind for everyone
+- [Host an online room](https://onehill.app/play.html?host): gives a five-letter invite code
+- [Host a public room](https://onehill.app/play.html?host&public): the room also appears in the public list
+- [Play in 3D](https://onehill.app/play.html?view=3d): the same game drawn as a 3D diorama
+
+## Features
+
+- 1 to 4 players: against 1 to 3 CPU tanks (easy, normal, hard), hotseat on one keyboard, or online
+- Online play is peer-to-peer between browsers. Join with a five-letter invite code or an invite link
+- Public rooms: a host can list a room as PUBLIC. Listed rooms appear on the front page and on the game's join screen, and anyone can join one. Rooms are PRIVATE by default
+- 2D view or 3D view (press V, or use the 2D / 3D switch). Rules are identical in both. 3D needs WebGL2
+- Two looks: 1990 (VGA palette, chunky pixels) and 2026 (paper, ink, signal orange)
+- Weapons: shell, HE bomb, MIRV, digger, nuke, dirt bomb, plus shields and guidance
+- Great-shot callouts: BULLSEYE, DEAD CENTER, LUCKY HIT, WIND RIDER, LONG SHOT, FROM ORBIT, DOUBLE KILL, TRIPLE KILL, OWN GOAL
+- Works on phones and tablets: drag to aim, tap to fire
+
+## Controls
+
+- A / D or left / right arrows: barrel angle. W / S or up / down arrows: power
+- Space or Enter: fire. 1 to 6: choose a weapon. T: full aiming arc (uses guidance)
+- V: switch 2D / 3D. Q / E: turn the 3D camera. M: mute. Esc: back to the title
+- Mouse or touch: drag around the tank to aim, drag up or down for power, click or tap to fire
+
+## Notes
+
+- All graphics and sounds are original. Nothing is taken from the DOS game, and One Hill is not affiliated with it
+- Made by [culi.app](https://culi.app)

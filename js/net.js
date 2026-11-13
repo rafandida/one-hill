@@ -9,7 +9,13 @@
  * Self-host the broker with `npx peer --port 9000` and open the game with
  * `?broker=your.host:9000` (the invite link carries it along).
  *
- * Exposes window.TankNet: makeCode, cleanCode, inviteLink, host, join.
+ * Public rooms have no server either. One browser holds the list: whoever
+ * first registers the well-known lobby ID. Everyone else dials that ID to read
+ * the list or to add their room to it. When the holder leaves, the others
+ * notice the dropped link and one of them takes the ID over; hosts then put
+ * their rooms back. See lobby() below.
+ *
+ * Exposes window.TankNet: makeCode, cleanCode, inviteLink, host, join, lobby.
  */
 (function () {
   "use strict";
@@ -25,6 +31,10 @@
   const PING_MS = 2000;
   const DEAD_MS = 9000;
   const DIAL_MS = 15000;
+  const LOBBY_ID = ID_PREFIX + "lobby";
+  // The broker takes about five seconds to say that nobody holds an ID.
+  const LOBBY_DIAL_MS = 9000;
+  const LOBBY_MAX = 30;
 
   const params = new URLSearchParams(location.search);
 
@@ -256,6 +266,213 @@
     });
   }
 
+  /** A room as the list carries it, or null if it is not a well-formed one. */
+  function cleanRoom(r) {
+    if (!r || typeof r !== "object") return null;
+    const code = cleanCode(r.code);
+    if (code.length !== CODE_LEN || code !== r.code) return null;
+    function whole(v, lo, hi) {
+      v = Math.floor(Number(v));
+      return v >= lo && v <= hi ? v : lo;
+    }
+    return { code: code, humans: whole(r.humans, 1, 4), cpu: whole(r.cpu, 0, 3), diff: whole(r.diff, 0, 2) };
+  }
+
+  function cleanRooms(list) {
+    const out = [];
+    const seen = {};
+    if (!Array.isArray(list)) return out;
+    for (let i = 0; i < list.length && out.length < LOBBY_MAX; i++) {
+      const r = cleanRoom(list[i]);
+      if (!r || seen[r.code]) continue;
+      seen[r.code] = true;
+      out.push(r);
+    }
+    return out;
+  }
+
+  /**
+   * The public room list. Watches it, and optionally lists a room of your own.
+   * on: { rooms(list), state("connecting" | "live" | "down") }
+   * Returns { publish(room or null), close() }. A room is
+   * { code, humans, cpu, diff }; publish(null) takes it off the list.
+   *
+   * Whoever holds LOBBY_ID keeps the list and sends it to every link whenever
+   * it changes. A room lives exactly as long as its host's link to the holder.
+   * Entries are untrusted (any browser can post one), so they are checked on
+   * the way in and again on the way out, and a made-up code just fails to dial.
+   */
+  function lobby(on) {
+    let closed = false;
+    let peer = null;
+    let link = null; // to the holder, when that is someone else
+    let held = null; // { links, rooms } when this browser is the holder
+    let mine = null;
+    let timer = 0;
+    let state = "";
+
+    function setState(s) {
+      if (s === state || closed) return;
+      state = s;
+      if (on.state) on.state(s);
+    }
+
+    function show(list) {
+      if (!closed && on.rooms) on.rooms(cleanRooms(list));
+    }
+
+    function drop() {
+      clearTimeout(timer);
+      const p = peer;
+      peer = null;
+      link = null;
+      held = null;
+      if (p && !p.destroyed) p.destroy();
+    }
+
+    /** Try again after a pause. The spread keeps a crowd from all claiming the ID at once. */
+    function again(slow) {
+      if (closed) return;
+      drop();
+      show([]);
+      timer = setTimeout(dial, (slow ? 4000 : 300) + Math.random() * (slow ? 4000 : 1500));
+    }
+
+    function heldRooms() {
+      const list = mine ? [mine] : [];
+      for (let i = 0; i < held.links.length; i++) {
+        if (held.links[i].room) list.push(held.links[i].room);
+      }
+      return cleanRooms(list);
+    }
+
+    function pushHeld() {
+      const list = heldRooms();
+      for (let i = 0; i < held.links.length; i++) held.links[i].send({ t: "rooms", rooms: list });
+      show(list);
+    }
+
+    function dial() {
+      if (closed) return;
+      loadPeer().then(
+        function (Peer) {
+          if (closed) return;
+          setState("connecting");
+          const p = new Peer(brokerOptions());
+          peer = p;
+          let up = false;
+          timer = setTimeout(function () {
+            if (!up && peer === p) again(true);
+          }, LOBBY_DIAL_MS);
+          p.on("open", function () {
+            const conn = p.connect(LOBBY_ID, { reliable: true, serialization: "json" });
+            conn.on("open", function () {
+              if (peer !== p) return;
+              up = true;
+              clearTimeout(timer);
+              link = wrap(
+                conn,
+                function (l, m) {
+                  if (m.t === "rooms") show(m.rooms);
+                },
+                function () {
+                  if (peer === p) again(false);
+                }
+              );
+              setState("live");
+              if (mine) link.send({ t: "room", room: mine });
+            });
+          });
+          p.on("error", function (err) {
+            if (up || peer !== p) return;
+            if (err.type === "peer-unavailable") {
+              // Nobody holds the list. Hold it.
+              drop();
+              claim(Peer);
+            } else {
+              setState("down");
+              again(true);
+            }
+          });
+        },
+        function () {
+          setState("down");
+        }
+      );
+    }
+
+    function claim(Peer) {
+      if (closed) return;
+      const p = new Peer(LOBBY_ID, brokerOptions());
+      peer = p;
+      let up = false;
+      p.on("open", function () {
+        if (peer !== p) return;
+        up = true;
+        held = { links: [] };
+        setState("live");
+        pushHeld();
+      });
+      p.on("connection", function (conn) {
+        conn.on("open", function () {
+          if (peer !== p || !held) {
+            conn.close();
+            return;
+          }
+          const l = wrap(
+            conn,
+            function (from, m) {
+              if (m.t !== "room" || !held) return;
+              from.room = cleanRoom(m.room);
+              pushHeld();
+            },
+            function (gone) {
+              if (!held) return;
+              const i = held.links.indexOf(gone);
+              if (i >= 0) held.links.splice(i, 1);
+              if (gone.room) pushHeld();
+            }
+          );
+          l.room = null;
+          held.links.push(l);
+          l.send({ t: "rooms", rooms: heldRooms() });
+        });
+      });
+      p.on("disconnected", function () {
+        if (peer === p && !p.destroyed) p.reconnect();
+      });
+      p.on("error", function (err) {
+        if (up || peer !== p) return;
+        // "unavailable-id": someone else took it a moment ago. Go and dial them.
+        if (err.type !== "unavailable-id") setState("down");
+        again(err.type !== "unavailable-id");
+      });
+    }
+
+    // Leaving the page frees the ID straight away instead of when the broker notices.
+    function leave() {
+      api.close();
+    }
+    window.addEventListener("pagehide", leave);
+
+    const api = {
+      publish: function (room) {
+        mine = room ? cleanRoom(room) : null;
+        if (closed) return;
+        if (held) pushHeld();
+        else if (link) link.send({ t: "room", room: mine });
+      },
+      close: function () {
+        if (closed) return;
+        closed = true;
+        window.removeEventListener("pagehide", leave);
+        drop();
+      },
+    };
+    dial();
+    return api;
+  }
+
   window.TankNet = {
     CODE_LEN: CODE_LEN,
     makeCode: makeCode,
@@ -263,5 +480,6 @@
     inviteLink: inviteLink,
     host: host,
     join: join,
+    lobby: lobby,
   };
 })();
