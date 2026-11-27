@@ -89,6 +89,7 @@
   const Snd = {
     on: false,
     ctx: null,
+    noiseBuf: null,
 
     wake: function () {
       if (!this.on) return false;
@@ -96,6 +97,11 @@
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return false;
         this.ctx = new AC();
+        const len = Math.floor(this.ctx.sampleRate);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        this.noiseBuf = buf;
       }
       if (this.ctx.state === "suspended") this.ctx.resume();
       return true;
@@ -118,14 +124,12 @@
     },
 
     noise: function (dur, vol, cutoff) {
-      if (!this.wake()) return;
+      if (!this.wake() || !this.noiseBuf) return;
       const t = this.ctx.currentTime;
-      const n = Math.floor(this.ctx.sampleRate * dur);
-      const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < n; i++) data[i] = Math.random() * 2 - 1;
       const src = this.ctx.createBufferSource();
-      src.buffer = buf;
+      src.buffer = this.noiseBuf;
+      src.loop = dur > 0.9;
+      const offset = Math.random() * Math.max(0, 0.95 - Math.min(dur, 0.9));
       const f = this.ctx.createBiquadFilter();
       f.type = "lowpass";
       f.frequency.setValueAtTime(cutoff, t);
@@ -136,8 +140,7 @@
       src.connect(f);
       f.connect(g);
       g.connect(this.ctx.destination);
-      src.start(t);
-      src.stop(t + dur);
+      src.start(t, offset, dur);
     },
 
     // 2026 swaps square and sawtooth beeps for rounder sine and triangle
@@ -328,6 +331,7 @@
     }
     this.you = this.placeTank(Math.round(w * 0.1), VGA.lcyan, VGA.cyan, 50);
     this.cpu = this.placeTank(Math.round(w * 0.9), VGA.lmag, VGA.magenta, 130);
+    this.groundDirty = true;
 
     // Biggest logo that fits; two lines when that is bigger (phones).
     const maxW = w * 0.88;
@@ -611,13 +615,18 @@
       }
     }
     // Same column bite as the game's excavate().
+    let carved = false;
     for (let cx = Math.max(0, Math.floor(x - r)); cx <= Math.min(this.w - 1, Math.ceil(x + r)); cx++) {
       const dx = cx - x;
       const inside = r * r - dx * dx;
       if (inside < 0) continue;
       const bot = y + Math.sqrt(inside);
-      if (bot > this.ground[cx]) this.ground[cx] = Math.min(this.h - 3, bot);
+      if (bot > this.ground[cx]) {
+        this.ground[cx] = Math.min(this.h - 3, bot);
+        carved = true;
+      }
     }
+    if (carved) this.groundDirty = true;
     const tanks = [this.you, this.cpu];
     for (let i = 0; i < tanks.length; i++) {
       if (Math.hypot(tanks[i].x - x, tanks[i].y - 5 - y) < r + 6) tanks[i].flash = 0.25;
@@ -774,6 +783,52 @@
     ctx.fillRect(Math.round(x + Math.cos(rad) * 13), Math.round(y - 8 - Math.sin(rad) * 13), 2, 2);
   };
 
+  Field.prototype.ensureGroundCache = function () {
+    const w = this.w;
+    const h = this.h;
+    const s = this.modern ? this.scale || 1 : 1;
+    const cw = Math.round(w * s);
+    const ch = Math.round(h * s);
+    if (!this.groundCache || this.groundCache.width !== cw || this.groundCache.height !== ch || this.groundCacheMode !== this.modern) {
+      const c = document.createElement("canvas");
+      c.width = cw;
+      c.height = ch;
+      this.groundCache = c;
+      this.groundCacheMode = this.modern;
+      this.groundDirty = true;
+    }
+    if (!this.groundDirty) return this.groundCache;
+    this.groundDirty = false;
+    const tc = this.groundCache.getContext("2d");
+    tc.setTransform(s, 0, 0, s, 0, 0);
+    tc.clearRect(0, 0, w, h);
+    if (this.modern) {
+      const hill = new Path2D();
+      hill.moveTo(0, h);
+      for (let x = 0; x < w; x++) hill.lineTo(x + 0.5, smoothed(this.ground, x));
+      hill.lineTo(w, h);
+      hill.closePath();
+      tc.fillStyle = "#1c1c1a";
+      tc.fill(hill);
+      tc.save();
+      tc.clip(hill);
+      tc.drawImage(this.grain, 0, 0, w, h);
+      tc.restore();
+    } else {
+      for (let x = 0; x < w; x++) {
+        const top = this.ground[x] | 0;
+        const speck = (x * 17 + top * 3) & 7;
+        tc.fillStyle = speck === 0 ? VGA.dgray : speck === 3 ? "#995000" : VGA.brown;
+        tc.fillRect(x, top, 1, h - top);
+        tc.fillStyle = speck === 2 ? "#5a3300" : "#774400";
+        tc.fillRect(x, top + 6, 1, h - top - 6);
+        tc.fillStyle = speck === 1 ? VGA.yellow : VGA.green;
+        tc.fillRect(x, top, 1, 1);
+      }
+    }
+    return this.groundCache;
+  };
+
   Field.prototype.draw = function () {
     if (this.modern) {
       this.drawModern();
@@ -814,17 +869,8 @@
     }
     ctx.drawImage(L.canvas, L.x, L.y);
 
-    // Dirt drawn column by column, the way the game does it.
-    for (let x = 0; x < w; x++) {
-      const top = this.ground[x] | 0;
-      const speck = (x * 17 + top * 3) & 7;
-      ctx.fillStyle = speck === 0 ? VGA.dgray : speck === 3 ? "#995000" : VGA.brown;
-      ctx.fillRect(x, top, 1, h - top);
-      ctx.fillStyle = speck === 2 ? "#5a3300" : "#774400";
-      ctx.fillRect(x, top + 6, 1, h - top - 6);
-      ctx.fillStyle = speck === 1 ? VGA.yellow : VGA.green;
-      ctx.fillRect(x, top, 1, 1);
-    }
+    // Dirt drawn from cached offscreen canvas, rebuilt only when craters carve it.
+    ctx.drawImage(this.ensureGroundCache(), 0, 0, w, h);
 
     this.drawTank(ctx, this.you);
     this.drawTank(ctx, this.cpu);
@@ -967,18 +1013,8 @@
     const L = this.logo;
     ctx.drawImage(L.dots, L.x, L.y, L.w, L.h);
 
-    // Hills: solid charcoal with a fine dot grain.
-    const hill = new Path2D();
-    hill.moveTo(0, h);
-    for (let x = 0; x < w; x++) hill.lineTo(x + 0.5, smoothed(this.ground, x));
-    hill.lineTo(w, h);
-    hill.closePath();
-    ctx.fillStyle = "#1c1c1a";
-    ctx.fill(hill);
-    ctx.save();
-    ctx.clip(hill);
-    ctx.drawImage(this.grain, 0, 0, w, h);
-    ctx.restore();
+    // Hills: cached charcoal + dot grain, rebuilt only when craters carve it.
+    ctx.drawImage(this.ensureGroundCache(), 0, 0, w, h);
 
     drawModernTank(ctx, this.you);
     drawModernTank(ctx, this.cpu);

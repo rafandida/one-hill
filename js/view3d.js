@@ -12,7 +12,7 @@
   "use strict";
 
   const DEPTH = 44; // half the slab's thickness, in game pixels
-  const SLICES = 8; // strips across the top of the slab
+  const Z_BANDS = [-DEPTH, -15, 15, DEPTH]; // 3 strips: sculpted back flank, flat centre lane, sculpted front flank
   const FOV_TAN = Math.tan((15 * Math.PI) / 180);
   const PITCH = 0.3;
   const MARGIN = 1.07;
@@ -34,7 +34,9 @@
     "uniform vec3 uEye; uniform vec3 uLight; uniform float uAmbient; uniform float uBands;\n" +
     "out vec4 frag;\n" +
     "void main() {\n" +
-    "  vec3 n = normalize(cross(dFdx(vPos), dFdy(vPos)));\n" +
+    "  vec3 cp = cross(dFdx(vPos), dFdy(vPos));\n" +
+    "  float cl = length(cp);\n" +
+    "  vec3 n = cl > 1e-6 ? cp / cl : vec3(0.0, -1.0, 0.0);\n" +
     "  if (dot(n, uEye - vPos) < 0.0) n = -n;\n" +
     "  float l = uAmbient + (1.0 - uAmbient) * max(dot(n, uLight), 0.0);\n" +
     "  if (uBands > 0.0) l = floor(l * uBands + 0.5) / uBands;\n" +
@@ -125,37 +127,82 @@
     this.quad(bx, by, z0, ex, ey, z0, ex, ey, z1, bx, by, z1, c, a, l);
   };
 
-  const SEGS = 12;
-  const RINGS = 7;
-  const RING_SIN = [];
-  const RING_COS = [];
-  const SEG_SIN = [];
-  const SEG_COS = [];
-  for (let i = 0; i <= RINGS; i++) {
-    RING_SIN.push(Math.sin((i / RINGS) * Math.PI));
-    RING_COS.push(Math.cos((i / RINGS) * Math.PI));
+  function makeSphereTable(rings, segs) {
+    const rSin = [];
+    const rCos = [];
+    const sSin = [];
+    const sCos = [];
+    for (let i = 0; i <= rings; i++) {
+      rSin.push(Math.sin((i / rings) * Math.PI));
+      rCos.push(Math.cos((i / rings) * Math.PI));
+    }
+    for (let i = 0; i <= segs; i++) {
+      sSin.push(Math.sin((i / segs) * Math.PI * 2));
+      sCos.push(Math.cos((i / segs) * Math.PI * 2));
+    }
+    return { rings: rings, segs: segs, rSin: rSin, rCos: rCos, sSin: sSin, sCos: sCos };
   }
-  for (let i = 0; i <= SEGS; i++) {
-    SEG_SIN.push(Math.sin((i / SEGS) * Math.PI * 2));
-    SEG_COS.push(Math.cos((i / SEGS) * Math.PI * 2));
-  }
+  const SPHERE_LO = makeSphereTable(4, 6);
+  const SPHERE_HI = makeSphereTable(6, 10);
 
-  Batch.prototype.ball = function (cx, cy, cz, r, color, alpha, lit) {
+  Batch.prototype.ball = function (cx, cy, cz, r, color, alpha, lit, hi) {
     const c = rgb(color);
-    for (let i = 0; i < RINGS; i++) {
-      const y0 = cy - RING_COS[i] * r;
-      const y1 = cy - RING_COS[i + 1] * r;
-      const r0 = RING_SIN[i] * r;
-      const r1 = RING_SIN[i + 1] * r;
-      for (let j = 0; j < SEGS; j++) {
+    const t = r <= 4 && !hi ? SPHERE_LO : SPHERE_HI;
+    for (let i = 0; i < t.rings; i++) {
+      const y0 = cy - t.rCos[i] * r;
+      const y1 = cy - t.rCos[i + 1] * r;
+      const r0 = t.rSin[i] * r;
+      const r1 = t.rSin[i + 1] * r;
+      for (let j = 0; j < t.segs; j++) {
         this.quad(
-          cx + SEG_COS[j] * r0, y0, cz + SEG_SIN[j] * r0,
-          cx + SEG_COS[j + 1] * r0, y0, cz + SEG_SIN[j + 1] * r0,
-          cx + SEG_COS[j + 1] * r1, y1, cz + SEG_SIN[j + 1] * r1,
-          cx + SEG_COS[j] * r1, y1, cz + SEG_SIN[j] * r1,
+          cx + t.sCos[j] * r0, y0, cz + t.sSin[j] * r0,
+          cx + t.sCos[j + 1] * r0, y0, cz + t.sSin[j + 1] * r0,
+          cx + t.sCos[j + 1] * r1, y1, cz + t.sSin[j + 1] * r1,
+          cx + t.sCos[j] * r1, y1, cz + t.sSin[j] * r1,
           c, alpha, lit
         );
       }
+    }
+  };
+
+  /** Soft flat contact shadow resting just above the terrain slab (XZ plane). */
+  const SHADOW_COL = [0.04, 0.04, 0.06];
+  Batch.prototype.shadow = function (cx, cy, cz, rx, rz, alpha) {
+    if (alpha <= 0.01) return;
+    const y = cy - 0.25;
+    this.quad(
+      cx - rx, y, cz - rz,
+      cx + rx, y, cz - rz,
+      cx + rx, y, cz + rz,
+      cx - rx, y, cz + rz,
+      SHADOW_COL, alpha, 0
+    );
+  };
+
+  /** Expanding 3D shockwave ring in the horizontal XZ plane. */
+  const RING_SEGS = 14;
+  const RING_COS_T = [];
+  const RING_SIN_T = [];
+  for (let i = 0; i <= RING_SEGS; i++) {
+    const a = (i / RING_SEGS) * Math.PI * 2;
+    RING_COS_T.push(Math.cos(a));
+    RING_SIN_T.push(Math.sin(a));
+  }
+  Batch.prototype.ring = function (cx, cy, cz, rIn, rOut, color, alpha) {
+    if (alpha <= 0.01 || rOut <= rIn) return;
+    const c = rgb(color);
+    for (let i = 0; i < RING_SEGS; i++) {
+      const c0 = RING_COS_T[i];
+      const s0 = RING_SIN_T[i];
+      const c1 = RING_COS_T[i + 1];
+      const s1 = RING_SIN_T[i + 1];
+      this.quad(
+        cx + c0 * rIn, cy, cz + s0 * rIn,
+        cx + c1 * rIn, cy, cz + s1 * rIn,
+        cx + c1 * rOut, cy, cz + s1 * rOut,
+        cx + c0 * rOut, cy, cz + s0 * rOut,
+        c, alpha, 0
+      );
     }
   };
 
@@ -234,14 +281,19 @@
     gl.enableVertexAttribArray(2);
     gl.vertexAttribPointer(2, 1, gl.FLOAT, false, stride, 28);
     gl.bindVertexArray(null);
-    return { vao: vao, buf: buf, count: 0 };
+    return { vao: vao, buf: buf, count: 0, cap: 0 };
   };
 
   Renderer.prototype.upload = function (mesh, batch, usage) {
     const gl = this.gl;
-    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buf);
-    gl.bufferData(gl.ARRAY_BUFFER, batch.a.subarray(0, batch.n), usage);
     mesh.count = batch.n / FLOATS;
+    if (!batch.n) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buf);
+    if (batch.n > mesh.cap) {
+      mesh.cap = Math.max(batch.n, mesh.cap * 2, 2048);
+      gl.bufferData(gl.ARRAY_BUFFER, mesh.cap * 4, usage);
+    }
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, batch.a.subarray(0, batch.n));
   };
 
   Renderer.prototype.drawMesh = function (mesh) {
@@ -258,15 +310,17 @@
     this.H = cfg.H;
     this.floor = cfg.H + 70; // the slab runs on below the screen
     this.renderers = [null, null];
-    this.landBatch = new Batch(48000);
+    this.landBatch = new Batch(28000);
     this.solidBatch = new Batch(4096);
     this.glassBatch = new Batch(4096);
     this.heights = new Float32Array(cfg.W);
+    this.baseHeights = null;
     this.landStamp = "";
     this.landVersion = 0;
     this.yaw = 0;
     this.turn = 0; // the player's own Q/E turn, added to the camera's lean
     this.tilt = 1;
+    this.loft = 0; // smooth vertical pull-back for high "from orbit" lobs
     this.kick = 0; // a great shot pulls the camera in toward kickX
     this.kickX = cfg.W / 2;
     this.last = 0;
@@ -301,15 +355,25 @@
     else if (!reduce) want = ((o.focusX - this.W / 2) / (this.W / 2)) * 0.13;
     this.yaw += (want - this.yaw) * Math.min(1, dt * 2.2);
 
+    const wantLoft = !o.backdrop && !reduce && o.focusY !== undefined
+      ? Math.max(0, Math.min(1, (o.top + 35 - o.focusY) / 140))
+      : 0;
+    this.loft += (wantLoft - this.loft) * Math.min(1, dt * 3.5);
+
     const ease = this.tilt * this.tilt * (3 - 2 * this.tilt);
     const yaw = (this.yaw + (o.backdrop ? 0 : this.turn)) * ease;
-    const pitch = PITCH * ease;
+    const pitch = PITCH * (1 - 0.28 * this.loft) * ease;
     const aspect = this.W / o.h;
     if (this.kick > 0) this.kick = Math.max(0, this.kick - dt * 1.1);
     const kick = this.kick * this.kick * (3 - 2 * this.kick);
-    const dist = (o.h / 2 / FOV_TAN) * (1 + (MARGIN - 1) * ease) * (1 + Math.abs(yaw) * 0.22) * (1 - 0.13 * kick);
+    const dist =
+      (o.h / 2 / FOV_TAN) *
+      (1 + (MARGIN - 1) * ease) *
+      (1 + Math.abs(yaw) * 0.22) *
+      (1 + 0.12 * this.loft * ease) *
+      (1 - 0.13 * kick);
     const tx = this.W / 2 + (this.kickX - this.W / 2) * 0.3 * kick;
-    const ty = o.top + o.h / 2 + 4 * ease;
+    const ty = o.top + o.h / 2 + 4 * ease - 18 * this.loft * ease;
     const ex = tx + Math.sin(yaw) * Math.cos(pitch) * dist;
     const ey = ty - Math.sin(pitch) * dist;
     const ez = Math.cos(yaw) * Math.cos(pitch) * dist;
@@ -399,13 +463,19 @@
     const src = scene.height;
     const stamp = (o.modern ? "m" : "r") + o.pal.brown + o.charcoal;
     let same = stamp === this.landStamp;
+    let changed = 0;
     for (let x = 0; x < W; x++) {
       if (this.heights[x] !== src[x]) {
         this.heights[x] = src[x];
         same = false;
+        changed++;
       }
     }
     if (same) return;
+    // Detect fresh map load (>35% columns jumped) so we capture un-cratered base silhouette.
+    if (!this.baseHeights || changed > W * 0.35) {
+      this.baseHeights = new Float32Array(src);
+    }
     this.landStamp = stamp;
     this.landVersion++;
 
@@ -413,16 +483,33 @@
     b.reset();
     const floor = this.floor;
     const ys = new Float32Array(W);
+    const rim = new Float32Array(W);
+    const baseSrc = scene.baseHeight || this.baseHeights;
     const taps = [1, 2, 3, 4, 3, 2, 1];
     for (let x = 0; x < W; x++) {
       let y = src[x];
+      let by = baseSrc[x];
       if (o.modern) {
         // The same light smoothing the flat 2026 hills get.
         y = 0;
-        for (let t = 0; t < taps.length; t++) y += src[Math.max(0, Math.min(W - 1, x + t - 3))] * taps[t];
+        by = 0;
+        for (let t = 0; t < taps.length; t++) {
+          const xi = Math.max(0, Math.min(W - 1, x + t - 3));
+          y += src[xi] * taps[t];
+          by += baseSrc[xi] * taps[t];
+        }
         y /= 16;
+        by /= 16;
       }
-      ys[x] = Math.min(y, floor - 30);
+      y = Math.min(y, floor - 30);
+      by = Math.min(by, floor - 30);
+      ys[x] = y;
+      // Sculpt craters into 3D bowls (outer edges curve up toward original hill)
+      // and dirt mounds into 3D piles (outer edges taper down toward original hill).
+      const diff = y - by;
+      if (diff > 1) rim[x] = y - Math.min(22, diff * 0.42);
+      else if (diff < -1) rim[x] = y + Math.min(14, -diff * 0.3);
+      else rim[x] = y;
     }
 
     const pal = o.pal;
@@ -448,34 +535,52 @@
       return deep[speck === 2 ? 2 : 0];
     }
 
-    const step = (DEPTH * 2) / SLICES;
+    const scorch = o.modern ? rgb("#262523") : rgb("#6a3b00");
     for (let x = 0; x < W - 1; x++) {
       const a = ys[x];
       const c = ys[x + 1];
-      for (let k = 0; k < SLICES; k++) {
-        const z0 = -DEPTH + k * step;
-        const z1 = z0 + step;
+      const ar = rim[x];
+      const cr = rim[x + 1];
+      const cratered = a - ar > 2.5 || c - cr > 2.5;
+      // 3 top strips: back flank [-DEPTH..-15], flat centre lane [-15..15], front flank [15..DEPTH]
+      for (let k = 0; k < 3; k++) {
+        const z0 = Z_BANDS[k];
+        const z1 = Z_BANDS[k + 1];
+        const ay0 = k === 0 ? ar : a;
+        const cy0 = k === 0 ? cr : c;
+        const ay1 = k === 2 ? ar : a;
+        const cy1 = k === 2 ? cr : c;
         const h = (x * 31 + k * 57 + ((x * x) >> 2) * 13 + ((x * k * 7) >> 1)) & 15;
-        b.quad(x, a, z0, x + 1, c, z0, x + 1, c, z1, x, a, z1, top[h === 0 ? 2 : h < 4 ? 1 : 0], 1, 1);
+        const col = cratered && k === 1 ? scorch : top[h === 0 ? 2 : h < 4 ? 1 : 0];
+        b.quad(x, ay0, z0, x + 1, cy0, z0, x + 1, cy1, z1, x, ay1, z1, col, 1, 1);
       }
-      // The cut face toward the camera: turf, topsoil, subsoil.
+      // The cut face toward the camera: turf, topsoil, subsoil (connects cleanly to front rim).
       for (let s = 0; s < 3; s++) {
-        const a0 = Math.min(floor, a + cuts[s]);
-        const c0 = Math.min(floor, c + cuts[s]);
-        const a1 = s === 2 ? floor : Math.min(floor, a + cuts[s + 1]);
-        const c1 = s === 2 ? floor : Math.min(floor, c + cuts[s + 1]);
-        b.quad(x, a0, DEPTH, x + 1, c0, DEPTH, x + 1, c1, DEPTH, x, a1, DEPTH, strata(x, a, s), 1, 1);
+        const a0 = Math.min(floor, ar + cuts[s]);
+        const c0 = Math.min(floor, cr + cuts[s]);
+        const a1 = s === 2 ? floor : Math.min(floor, ar + cuts[s + 1]);
+        const c1 = s === 2 ? floor : Math.min(floor, cr + cuts[s + 1]);
+        b.quad(x, a0, DEPTH, x + 1, c0, DEPTH, x + 1, c1, DEPTH, x, a1, DEPTH, strata(x, ar, s), 1, 1);
       }
     }
-    // The slab's two ends.
+    // The slab's two ends (3 Z-segments matching top profile).
     for (let e = 0; e < 2; e++) {
       const x = e ? W - 1 : 0;
       const a = ys[x];
-      for (let s = 0; s < 3; s++) {
-        const y0 = Math.min(floor, a + cuts[s]);
-        const y1 = s === 2 ? floor : Math.min(floor, a + cuts[s + 1]);
-        const col = s === 0 ? edge[0] : s === 1 ? dirt[0] : deep[0];
-        b.quad(x, y0, -DEPTH, x, y0, DEPTH, x, y1, DEPTH, x, y1, -DEPTH, col, 1, 1);
+      const ar = rim[x];
+      for (let k = 0; k < 3; k++) {
+        const z0 = Z_BANDS[k];
+        const z1 = Z_BANDS[k + 1];
+        const top0 = k === 0 ? ar : a;
+        const top1 = k === 2 ? ar : a;
+        for (let s = 0; s < 3; s++) {
+          const y00 = Math.min(floor, top0 + cuts[s]);
+          const y10 = Math.min(floor, top1 + cuts[s]);
+          const y01 = s === 2 ? floor : Math.min(floor, top0 + cuts[s + 1]);
+          const y11 = s === 2 ? floor : Math.min(floor, top1 + cuts[s + 1]);
+          const col = s === 0 ? edge[0] : s === 1 ? dirt[0] : deep[0];
+          b.quad(x, y00, z0, x, y10, z1, x, y11, z1, x, y01, z0, col, 1, 1);
+        }
       }
     }
   };
@@ -559,14 +664,35 @@
     }
     if (o.backdrop) return;
 
+    const hArr = this.heights;
+    const maxX = this.W - 1;
+    function groundAt(x) {
+      const xi = x < 0 ? 0 : x > maxX ? maxX : x | 0;
+      return hArr[xi];
+    }
+
     for (let i = 0; i < scene.tanks.length; i++) {
       const t = scene.tanks[i];
       if (scene.mode === "drop" && !t.dropped && t.y < o.top) continue;
+      if (t.alive || t.death <= 0) {
+        const gy = groundAt(t.x);
+        const alt = Math.max(0, gy - t.y);
+        if (alt < 70) {
+          const k = 1 - alt / 70;
+          glass.shadow(t.x, gy, 0, 9.5 * (0.65 + 0.35 * k), 7.2 * (0.65 + 0.35 * k), (m ? 0.22 : 0.34) * k);
+        }
+      }
       addTank(solid, glass, t, o);
     }
 
     for (let i = 0; i < scene.crates.length; i++) {
       const c = scene.crates[i];
+      const gy = groundAt(c.x);
+      const alt = Math.max(0, gy - c.y);
+      if (alt < 70) {
+        const k = 1 - alt / 70;
+        glass.shadow(c.x, gy, 0, 6.2 * (0.65 + 0.35 * k), 5.2 * (0.65 + 0.35 * k), (m ? 0.2 : 0.3) * k);
+      }
       const flash = Math.floor(c.blink * 6) % 2 === 0;
       if (m) {
         solid.box(c.x, c.y - 2, 0, 5.5, 4.5, 4.5, o.paper);
@@ -589,6 +715,12 @@
       } else {
         for (let k = 0; k < n; k += 4) glass.dot(p.trail[k], p.trail[k + 1], 0.5, pal.dgray, 1);
       }
+      const gy = groundAt(p.x);
+      const alt = gy - p.y;
+      if (alt > 2 && alt < 120) {
+        const k = 1 - alt / 120;
+        glass.shadow(p.x, gy, 0, 2.6 + (1 - k) * 2.5, 2.2 + (1 - k) * 2, (m ? 0.2 : 0.28) * k);
+      }
       const digging = p.weapon.kind === "digger" && p.digging;
       solid.ball(p.x, p.y, 0, m ? 2 : 1.8, digging ? pal.brown : pal.yellow, 1, m ? 0.35 : 0);
       if (!m) glass.ball(p.x, p.y, 0, 0.8, pal.white, 1, 0);
@@ -597,15 +729,36 @@
     for (let i = 0; i < scene.explosions.length; i++) {
       const e = scene.explosions[i];
       const k = e.t / e.life;
+      const out = 1 - (1 - k) * (1 - k);
+      const gy = Math.min(e.y, groundAt(e.x) - 0.5);
       if (m) {
         const r = e.r * (0.5 + 0.8 * k);
         glass.ball(e.x, e.y, 0, r, pal.black, 0.2 * (1 - k), 0);
         if (k < 0.45) glass.ball(e.x, e.y, 0, r * 0.8, pal.yellow, 1 - k / 0.45, 0);
+        // Expanding 3D shockwave ring on the horizontal slab plane.
+        const sr = e.r * (0.4 + 1.45 * out);
+        glass.ring(e.x, gy, 0, sr * 0.82, sr, pal.yellow, 0.55 * (1 - k));
+        if (e.big) glass.ring(e.x, gy - 1.5, 0, sr * 1.05, sr * 1.18, pal.black, 0.26 * (1 - k));
       } else {
         const r = e.r * (0.35 + 0.75 * k);
         const cols = [pal.white, pal.yellow, pal.lred, pal.red];
         glass.ball(e.x, e.y, 0, r, cols[Math.min(cols.length - 1, Math.floor(k * cols.length))], 0.9, 0);
         glass.ball(e.x, e.y, 0, r * 0.4, pal.white, 1, 0);
+        const sr = e.r * (0.45 + 1.4 * out);
+        glass.ring(e.x, gy, 0, sr * 0.8, sr, k < 0.4 ? pal.white : pal.yellow, 0.65 * (1 - k));
+        if (e.big) glass.ring(e.x, gy - 1.5, 0, sr * 1.06, sr * 1.22, pal.lred, 0.45 * (1 - k));
+      }
+      // Rising smoke cube cluster for 3D depth on big blasts.
+      if (e.big && k > 0.15) {
+        const sk = (k - 0.15) / 0.85;
+        const sa = 0.28 * (1 - sk);
+        const sc = m ? pal.black : pal.dgray;
+        for (let s = 0; s < 3; s++) {
+          const a = s * 2.1 + e.x * 0.1;
+          const off = e.r * 0.35 * sk;
+          const sz = e.r * (0.14 + 0.1 * sk);
+          glass.box(e.x + Math.cos(a) * off, e.y - sk * e.r * 0.9 - s * 3, Math.sin(a) * off, sz, sz, sz, sc, sa, 0.4);
+        }
       }
     }
 
